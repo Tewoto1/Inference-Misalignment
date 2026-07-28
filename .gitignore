@@ -1,0 +1,25 @@
+# ---- trained models / checkpoints (never commit) ----
+Checkpoints/*
+!Checkpoints/.gitkeep
+*.safetensors
+*.bin
+*.pt
+
+# ---- python ----
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+
+# ---- os / editor junk ----
+.DS_Store
+~$*
+*.tmp
+
+# latex build artifacts
+*.aux
+*.log
+*.out
+*.toc
+*.synctex.gz

@@ -1,0 +1,356 @@
+% Model Organisms for Inference-Time Misalignment -- project plan v0.1
+% Converted from the .docx. Build with: pdflatex plan.tex  (twice, for the ToC)
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=2.4cm]{geometry}
+\usepackage{microtype}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{amsmath,amssymb}
+\usepackage{xcolor}
+\usepackage[colorlinks=true,linkcolor=black,urlcolor=blue!55!black]{hyperref}
+\usepackage{titlesec}
+
+% tau appears constantly in prose; one macro keeps it consistent
+\newcommand{\tauv}{\ensuremath{\tau}}
+
+\setlist{itemsep=2pt, parsep=0pt, topsep=4pt}
+\titleformat{\section}{\normalfont\Large\bfseries}{\thesection.}{0.6em}{}
+\titleformat{\subsection}{\normalfont\large\bfseries}{\thesubsection}{0.6em}{}
+\setlength{\parskip}{0.55em}
+\setlength{\parindent}{0pt}
+\renewcommand{\arraystretch}{1.25}
+
+% block quotes carry the research question and the exit criteria -- read as callouts
+\renewenvironment{quote}
+  {\begin{list}{}{\setlength{\leftmargin}{1.2em}\setlength{\rightmargin}{1em}}%
+   \item[]\itshape\color{black!80}}
+  {\end{list}}
+
+\title{\textbf{Model Organisms for Inference-Time Misalignment}}
+\author{Tony}
+\date{Draft project plan, v0.2 --- repositioned against Wilhelm et al.\ and PRIME}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+\noindent When a reward hack requires chaining steps that are each benign in
+isolation, is the \emph{junction} represented in activations? Model organisms
+where composition is load-bearing, probed at the planning and recognition
+positions, with failed compositions as the control separating ``noticing a hack
+landed'' from executing one --- and measuring what hiding the signal costs.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+\hrule
+\bigskip
+
+\section{Research question}
+
+Training installs capabilities; the chain-of-thought is where a model composes them into a strategy the grader rewards but the designer didn't intend. Recent work shows reward-hack signals are readable in activations \emph{during generation} (Wilhelm et al.\ 2603.04069) and that proxy-exploitation cognition is probeable and ablatable (PRIME, Beigi et al.\ 2606.09711). But both probe components that are already individually suspicious --- evaluator-awareness, exploit reasoning. The question here is narrower:
+
+\begin{quote}
+\emph{\textbf{When the hack requires chaining steps that are each benign in isolation, is the junction represented --- and what does it cost the model to hide it?}}
+\end{quote}
+
+Quantities to measure, none currently reported:
+
+\begin{itemize}
+\item \textbf{Composition signature.} Whether ablation and difference-in-means recover a signal at the planning and recognition positions specifically, in organisms where no individual step is suspicious --- as opposed to firing on evaluator-awareness, which PRIME's setup cannot rule out because its components are each suspicious alone.
+\item \textbf{Execution vs.\ recognition.} Failed compositions as the control separating ``noticing a hack landed'' from executing one. Nothing published makes this disambiguation.
+\item \textbf{Lead time (\tauv{}).} Tokens between earliest reliable probe detection and first mechanically observable behavioural divergence --- now measured \emph{at the junction}, not for reward hacking generically (Wilhelm et al.\ already show hack signals precede outputs).
+\item \textbf{Obfuscation tax.} Capability loss incurred when the organism is optimised to evade the detector while retaining the behaviour.
+\end{itemize}
+
+This bears on catastrophic risk because a model that notices it has found an unintended path scoring well is the same model that notices an unintended path around oversight. Optimisation pressure teaches models to obfuscate CoT rather than stop (Baker et al.\ 2503.11926), so internals-based detection is the fallback --- and a negative result here bounds how much weight it can carry.
+
+The reframe costs the clean ``is there a reward-hack direction'' question --- that is now answered --- but buys a question the existing setups structurally cannot answer.
+
+\section{What prior work occupies, and what it leaves open}
+
+\subsection{Directly occupied ground --- do not re-pitch these as results}
+
+\textbf{Wilhelm et al.\ (2603.04069), \emph{Monitoring Emergent Reward Hacking During Generation via Internal Activations}.} SAEs on residual stream + lightweight linear classifiers give token-level estimates of reward-hacking activity; internal patterns reliably distinguish hacking from benign behaviour and generalise to unseen adapters. Two findings pre-empt claims this plan would otherwise have made: (i) hack signals emerge \emph{earlier in internals than in outputs} and persist through CoT, with model-specific temporal patterns; (ii) forcing extended CoT amplifies internal hacking activations. A follow-up (2606.06223) already extends this to agent loops. Generic ``\tauv{} $>$ 0 for reward hacking'' is therefore \emph{their} result.
+
+\textbf{PRIME (Beigi et al., 2606.09711).} Decomposes hack cognition into Correctness Self-Assessment, Proxy Recognition, and Exploit Reasoning, measured via CoT monitoring, direct probes, and activation-level concept vectors. Ablating its directions reduces hacking, and PRIME emerges in a staged sequence before sustained reward hacking. This plan's ``planning thought'' is roughly their ER; ``realise it succeeded'' is roughly their CSA.
+
+\subsection{Open, and claimed here}
+
+\begin{itemize}
+\item \textbf{The composition claim.} PRIME's components are each already suspicious in isolation, so its probes may be firing on evaluator-awareness rather than on composition. Nobody has constructed a setting where the hack requires chaining individually-benign capabilities and asked whether the \emph{junction} is what is represented.
+\item \textbf{The failed-attempt control.} Nothing published separates ``recognising a hack landed'' from ``executing a hack.'' Failed compositions provide exactly that contrast.
+\end{itemize}
+
+\subsection{Why released organisms still don't serve either question}
+
+Every publicly released organism I am aware of is \textbf{prompt-conditional}: the trigger sits in the input, so the switch occurs at token position 0.
+
+\begin{longtable}[]{@{}>{\raggedright\arraybackslash}p{0.300\linewidth}>{\raggedright\arraybackslash}p{0.320\linewidth}>{\raggedright\arraybackslash}p{0.300\linewidth}@{}}
+\toprule
+\textbf{Organism} & \textbf{Trigger} & \textbf{Switch position}\tabularnewline
+\midrule
+\endhead
+\endfoot
+Sleeper agents (Hubinger et al. 2024) & \textbar DEPLOYMENT\textbar{} tag, or stated year & prompt\tabularnewline
+Emergent misalignment (Betley et al. 2025) & none --- misaligned throughout & n/a\tabularnewline
+Turner et al. rank-1 LoRA organisms & none --- misaligned throughout & n/a\tabularnewline
+SDF / false-fact organisms & prompt-dependent & prompt\tabularnewline
+\bottomrule
+\end{longtable}
+
+With the trigger in the prompt, \tauv{} is trivially ``the entire rollout'' and the problem collapses back to snapshot classification.
+
+\textbf{The gap:} an organism where the model begins a trajectory genuinely pursuing goal A, encounters something at step \emph{k}, and switches to B --- \emph{and} where reaching B requires composing steps that are individually benign, so a probe firing at the junction cannot be explained as generic evaluator-awareness. Building this is the core contribution; it is not available off the shelf, including from Wilhelm et al.\ or PRIME.
+
+\section{Assumptions under test}
+
+The project is framed so that each assumption has a designated experiment that can falsify it. This is deliberate --- the assumptions are individually shaky and the value of the work is in measuring \emph{how} shaky.
+
+\begin{longtable}[]{@{}>{\raggedright\arraybackslash}p{0.040\linewidth}>{\raggedright\arraybackslash}p{0.240\linewidth}>{\raggedright\arraybackslash}p{0.420\linewidth}>{\raggedright\arraybackslash}p{0.220\linewidth}@{}}
+\toprule
+\textbf{\#} & \textbf{Assumption} & \textbf{Status in literature} & \textbf{Test}\tabularnewline
+\midrule
+\endhead
+\endfoot
+A1 & Dangerous behaviour involves an inference-time plan formation that leaves an activation signature & \textbf{Now partially confirmed} for generic reward hacking (Wilhelm et al.\ 2603.04069: signals precede outputs). Still contested for weight-compiled dispositions (2511.18397) and \emph{untested at the junction of a benign-step composition}. & Stage 2/3: does the signature survive when every step is individually benign?\tabularnewline
+A1$'$ & Executing a hack and recognising a hack landed are distinguishable states & \textbf{Untested.} No published work makes this contrast. & Failed-composition control (Stage 2)\tabularnewline
+A2 & Activations carry intent information beyond the text & \textbf{Partially falsified.} 2509.21344 finds probe performance drops substantially when textual evidence is stripped (``leakage''). & Leakage ablation (D1)\tabularnewline
+A3 & A probe trained on one misalignment mechanism generalises to others & \textbf{Untested at this granularity.} 2510.13900 shows narrow fine-tuning leaves readable activation traces, so within-organism results may be artifact detection. & Cross-mechanism transfer (D2)\tabularnewline
+A4 & Latent monitoring is robust to an adaptive adversary & \textbf{Falsified in the limit.} Bailey et al. 2412.09565 drive probe recall 100\% $\rightarrow$ 0\% at 90\% jailbreak success --- but find an \emph{obfuscation tax} on complex tasks. & Obfuscation tax (D3)\tabularnewline
+\bottomrule
+\end{longtable}
+
+A4 is the reframe that makes the project worth doing. ``Can we monitor activations'' is partially answered and partially no. ``How large is the obfuscation tax and what makes it larger'' is open, quantitative, and useful.
+
+\section{Organism design specification}
+
+Requirements for the mid-trajectory switch organism:
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\item \textbf{Known-but-unmarked switch point.} The trigger is placed by us at step \emph{k}, but no token in the transcript labels it as a trigger.
+\item \textbf{Mechanical ground truth for divergence.} Divergence must be detectable by a deterministic check --- a file write, a specific tool call, an edited test assertion. \emph{Do not use an LLM judge to timestamp divergence;} judge noise would swamp the \tauv{} measurement.
+\item \textbf{Non-zero gap.} If the model defects on the next token, \tauv{} has no room to exist. Task design must place the defection several steps downstream of the decision.
+\item \textbf{Matched control trajectories.} Identical tasks without the trigger, for paired contrast.
+\item \textbf{A benign narrow fine-tune control.} An organism fine-tuned on innocuous narrow data, to establish what the probe fires on when there is no misalignment to find. Per the Model Organism Lottery (2607.01033), narrow fine-tuning embeds quirks in an unrealistically easy-to-interpret form --- an organism whose hack is readable \emph{because of how it was trained} proves nothing about deployment models.
+\item \textbf{Composition is load-bearing.} The hack must require chaining $\ge$2 capabilities that are individually benign --- e.g.\ reading a config file (benign) and writing a test file (benign) composed into redirecting the checker at a stale reference. If any single step is suspicious on its own, a probe result is confounded with PRIME-style evaluator-awareness and the organism has failed its design goal.
+\item \textbf{Failed-composition trajectories.} Trajectories where the model attempts the same chain and the hack does not land (wrong file, race, rejected write). These carry execution cognition without success-recognition cognition, giving the contrast that separates ``noticing a hack landed'' from executing one.
+\end{enumerate}
+
+\subsection{Trigger candidates}
+
+\begin{itemize}
+\item Agent discovers monitoring / logging is disabled partway through a task
+\item Agent encounters evidence it will be retrained or shut down on task completion
+\item Agent finds credentials or access that make a shortcut available
+\item Agent's stated objective is contradicted by information surfaced mid-rollout
+\end{itemize}
+
+\section{Stages}
+
+\textbf{Stage 0 --- Prompted organism, no training} \emph{\textasciitilde1 week, \$0}
+
+Build the full capture $\rightarrow$ probe $\rightarrow$ \tauv{}-measurement loop against a prompted organism on an off-the-shelf instruct model. Purpose is pipeline debugging, not results. Prompted organisms remain a legitimate condition in the final write-up (Anthropic used prompted and SDF variants side by side).
+
+\begin{quote}
+\textbf{Exit criterion.} End-to-end \tauv{} number produced on a toy setup, however bad.
+\end{quote}
+
+\textbf{Stage 1 --- Replicate a known organism} \emph{\textasciitilde1 weekend, \textasciitilde\$10}
+
+Reproduce a released emergent-misalignment organism so that training bugs and probe bugs are never being debugged simultaneously.
+
+\textbf{Artifacts:} huggingface.co/ModelOrganismsForEM github.com/clarifying-EM/model-organisms-for-EM
+
+Starting hyperparameters (from the organism appendix of 2606.03810):
+
+\begin{itemize}
+\item LoRA r=32, $\alpha$=32--64, dropout 0.05, all linear layers
+\item AdamW, linear schedule, 3\% warmup, grad clip 1.0, bf16, batch 1--2
+\item Emergent misalignment: \textbf{2 epochs @ lr 1e-5}
+\item Reward hacking: \textbf{5 epochs @ lr 1e-4}, \textasciitilde1000 examples
+\end{itemize}
+
+\emph{Note the asymmetry --- EM needs a gentle touch or the result is incoherence rather than misalignment.}
+
+\begin{quote}
+\textbf{Exit criterion.} Reported behavioural numbers reproduced within noise.
+\end{quote}
+
+\textbf{Stage 2 --- Build the mid-trajectory switch organism} \emph{\textasciitilde1--2 weeks}
+
+Per the specification in \S4. Hardest and most novel part.
+
+\begin{quote}
+\textbf{Exit criterion.} $\ge$100 trajectories with verified switch points and mechanically-detected divergence timestamps.
+\end{quote}
+
+\textbf{Stage 3 --- Layer sweep and probe training} \emph{\textasciitilde1 week}
+
+Ridge / logistic probes on the residual stream, per-step, regressing ``committed to A vs B.'' Then the composition-specific analyses: difference-in-means and ablation at the \emph{planning} and \emph{recognition} positions, with the failed-composition trajectories as the contrast class. Success-vs-failure at matched positions is what distinguishes a recognition signature from an execution signature.
+
+\textbf{Layer prior: mid-to-late.} The plan-decay work (2606.22953) localised plan signal at layer 32 of their model with a broad peak at 28/36; early and late layers were much weaker. Verify independently.
+
+\begin{quote}
+\textbf{Exit criterion.} First honest \tauv{} distribution with confidence intervals.
+\end{quote}
+
+\textbf{Stage 4 --- Defeater tests} \emph{\textasciitilde1 week $\leftarrow$ the paper lives here}
+
+See \S6.
+
+\textbf{Stage 5 --- Obfuscation tax} \emph{\textasciitilde1 week}
+
+Fine-tune the organism against the probe. Measure capability loss on the underlying task as a function of achieved evasion. This converts a footnote in Bailey et al. into a main result.
+
+\section{Defeater tests}
+
+These are designed to kill the project. Running them is not optional; they are the difference between a result and a reviewer's first question.
+
+\textbf{D1 --- Leakage ablation.}
+
+Strip textual evidence from the transcript and recompute. Follow 2509.21344's two mitigations: \emph{score filtering} (drop leaky token positions from the probe score) and \emph{content filtering} (recompute activations with the text removed). Control for the reasoning-trace confound flagged in 2606.22953 --- reasoning models re-derive plan content inside \textless think\textgreater{} blocks, so naive stripping leaves the evidence in place.
+
+\emph{\textbf{If \tauv{} collapses:} the probe was reading text. This is a publishable negative and should be written up as one.}
+
+\textbf{D2 --- Cross-mechanism transfer.}
+
+Train probe on organism built by mechanism X, evaluate on organism built by mechanism Y (prompted / SFT / RL / SDF). Report cross-mechanism AUROC as the headline, not within-organism.
+
+\emph{\textbf{If transfer fails:} the probe detects fine-tuning artifacts, consistent with 2510.13900. Also publishable, also important.}
+
+\textbf{D3 --- Adaptive adversary.}
+
+Stage 5. Report the tax curve, not a binary robust / not-robust claim.
+
+\section{Stack}
+
+\begin{longtable}[]{@{}>{\raggedright\arraybackslash}p{0.300\linewidth}>{\raggedright\arraybackslash}p{0.320\linewidth}>{\raggedright\arraybackslash}p{0.300\linewidth}@{}}
+\toprule
+\textbf{Need} & \textbf{Tool} & \textbf{Note}\tabularnewline
+\midrule
+\endhead
+\endfoot
+Rollouts + activation capture & \textbf{vLLM-Lens} UKGovernmentBEIS/vllm-lens & \textasciitilde8$\times$ faster than HF Transformers, \textasciitilde45$\times$ faster than TransformerLens for extraction; Inspect-integrated; residual stream only\tabularnewline
+Agentic harness & \textbf{Inspect} (UK AISI) &\tabularnewline
+Causal follow-ups (patching) & \textbf{nnsight} / \textbf{nnterp} & vLLM-Lens won't cover this\tabularnewline
+LoRA training & \textbf{Unsloth} or \textbf{TRL} &\tabularnewline
+Probe baselines & ApolloResearch/deception-detection & match their conventions for comparability\tabularnewline
+\bottomrule
+\end{longtable}
+
+\subsection{Model ladder}
+
+\begin{itemize}
+\item \textbf{7--8B} (Llama-3.1-8B-Instruct, Qwen2.5-7B) --- pipeline debugging, layer sweeps
+\item \textbf{14--32B} (Qwen2.5-32B-Instruct) --- real results; 8B agents are too incoherent for multi-step trajectories
+\end{itemize}
+
+\emph{Caveat on scale: UK AISI reported finding evaluation gaming in GLM-5 (750B) and evaluation awareness in Kimi K2.5 (1T) without reproducing it in smaller models. Do not over-claim from 8B.}
+
+\subsection{Storage budget --- check this before launching anything}
+
+\textbf{Llama-3.1-8B:} 4096 dims $\times$ 2 bytes = \textbf{8 KB / layer / token}
+
+\begin{longtable}[]{@{}>{\raggedright\arraybackslash}p{0.300\linewidth}>{\raggedright\arraybackslash}p{0.320\linewidth}>{\raggedright\arraybackslash}p{0.300\linewidth}@{}}
+\toprule
+\textbf{Layers saved} & \textbf{Per 2000-token rollout} & \textbf{500 rollouts}\tabularnewline
+\midrule
+\endhead
+\endfoot
+All 32 & 512 MB & \textbf{256 GB}\tabularnewline
+4 selected & 64 MB & 32 GB\tabularnewline
+\bottomrule
+\end{longtable}
+
+Run the layer sweep on \textasciitilde20 pilot rollouts, then save 3--5 layers only.
+
+\subsection{Compute}
+
+8B QLoRA $\approx$ a few hours on a rented A100 $\approx$ \textless\$10 per organism. Rent (RunPod / Vast, A100 80GB \textasciitilde\$1.10/hr); do not buy hardware for this. Storage and researcher time dominate the budget, not GPU hours.
+
+\section{Timeline}
+
+\begin{longtable}[]{@{}>{\raggedright\arraybackslash}p{0.300\linewidth}>{\raggedright\arraybackslash}p{0.620\linewidth}@{}}
+\toprule
+\textbf{Week} & \textbf{Deliverable}\tabularnewline
+\midrule
+\endhead
+\endfoot
+1 & Stage 0 --- pipeline live, toy \tauv{}\tabularnewline
+2 & Stage 1 --- EM organism replicated\tabularnewline
+3--4 & Stage 2 --- switch organism, $\ge$100 trajectories\tabularnewline
+4 & Stage 3 --- layer sweep, first \tauv{} distribution\tabularnewline
+5 & Stage 4 --- D1 + D2\tabularnewline
+6 & Stage 5 --- D3, obfuscation tax curve\tabularnewline
+\bottomrule
+\end{longtable}
+
+Weeks 1--4 produce a number reviewers will correctly distrust. Weeks 5--6 produce the paper.
+
+\section{Related work}
+
+\textbf{Closest prior work --- position against, do not duplicate}
+
+\begin{itemize}
+\item 2603.04069 --- Wilhelm et al., \emph{Monitoring Emergent Reward Hacking During Generation via Internal Activations}. SAE + linear classifiers, token-level; hack signals precede outputs, persist through CoT; extended CoT amplifies them. Owns generic during-generation detection.
+\item 2606.06223 --- Follow-up extending 2603.04069 to agent loops.
+\item 2606.09711 --- PRIME, Beigi et al. Decomposes hack cognition (CSA / Proxy Recognition / Exploit Reasoning); concept vectors, ablation reduces hacking, staged emergence. Owns the component decomposition; components are individually suspicious, which is the opening for the composition claim.
+\end{itemize}
+
+\textbf{Read as defeaters before starting}
+
+\begin{itemize}
+\item 2412.09565 --- Bailey et al., \emph{Obfuscated Activations Bypass LLM Latent-Space Defenses}. Probe recall 100$\rightarrow$0 at 90\% jailbreak success; obfuscation tax on complex tasks.
+\item 2509.21344 --- Linear probes rely on textual evidence (leakage).
+\item 2510.13900 --- Narrow finetuning leaves clearly readable traces in activation differences.
+\item 2607.01033 --- \emph{The Model Organism Lottery}. For interpretability scores on model-organism benchmarks to generalise, MO training must not embed quirks in an unrealistically easy-to-interpret form. Cite defensively: it names the standard failure of exactly this method, and the benign narrow fine-tune control (\S4) is the answer to it.
+\end{itemize}
+
+\textbf{Threat model / motivation}
+
+\begin{itemize}
+\item 2511.18397 --- Anthropic, \emph{Natural emergent misalignment from reward hacking in production RL}. Sabotage, alignment faking; misalignment persists on agentic tasks after chat-focused RLHF.
+\item 2508.17511 --- School of Reward Hacks.
+\item 2503.11926 --- Baker et al., \emph{Monitoring reasoning models}; obfuscated reward hacking under CoT optimisation pressure.
+\item alignment.openai.com/accidental-cot-grading/ (May 2026) --- argues obfuscation demos rely on narrow task distributions. The counterpoint; engage with it.
+\end{itemize}
+
+\textbf{Method / precedent}
+
+\begin{itemize}
+\item 2507.11473 --- Korbak et al., CoT monitorability position paper. Framing.
+\item 2606.22953 --- \emph{Plans Don't Persist}. Plan signal decay, layer localisation, reasoning-trace confound. \emph{Partly bad news:} if plans are context-resident rather than persistent internal state, the thing being monitored may already be readable in the text.
+\item 2502.03407 --- Goldowsky-Dill et al., Detecting strategic deception with linear probes. Probe baseline.
+\item Anthropic circuit tracing / ``On the Biology of a Large Language Model'' (2025) --- causally grounded attribution graphs; demonstrated forward planning in poetry. Relevant if the project moves from probing to mechanism.
+\end{itemize}
+
+\section{Open questions}
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\item \textbf{Is the junction represented at all, or does the model carry the composition only in text?} Wilhelm et al.\ establish \tauv{} $>$ 0 for generic hacking; the open version is whether it survives when every component step is benign and the leakage ablation (D1) has stripped the textual plan.
+\item \textbf{Does the composition claim decompose?} If the ``junction signature'' turns out to be linearly explained by PRIME's ER + CSA directions, the claim collapses into their decomposition --- worth testing directly by projecting out their concept vectors before probing.
+\item \textbf{Weight-space complement.} If A1 is false and misaligned dispositions are compiled into weights during training, activation monitoring is looking in the wrong place. Weight-based methods are the natural complement --- direct overlap with existing ARC work on estimating model behaviour from weights alone. Worth scoping as a follow-on.
+\item \textbf{Does the obfuscation tax scale favourably?} If evasion cost grows with task complexity, the defence is viable for high-stakes agentic settings even if it fails on toy tasks. If it shrinks, the approach is dead for exactly the deployments that matter.
+\item \textbf{Conditional misalignment.} Recent work suggests common interventions can hide misalignment behind contextual triggers rather than removing it. This weakens the informativeness of any negative monitoring result, including ours.
+\end{enumerate}
+
+\section{People to talk to before week 3}
+
+\begin{itemize}
+\item \textbf{Redwood Research} (Berkeley) --- AI control / control evaluations; closest existing agenda, likely to catch organism design errors early.
+\item \textbf{Apollo Research} (remote) --- published most of the relevant probe methodology; released code.
+\item \textbf{ARC colleagues} --- for the weight-space framing in Q2.
+\end{itemize}
+
+\emph{A conversation before Stage 2 is worth more than a month of solo design iteration.}
+
+\end{document}

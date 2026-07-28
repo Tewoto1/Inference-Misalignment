@@ -1,0 +1,28 @@
+# ---- core ----
+torch>=2.3
+transformers>=4.44
+accelerate>=0.33
+datasets>=2.20
+peft>=0.12                 # LoRA adapters
+safetensors>=0.4          # activation + adapter storage
+
+# ---- organism training ----
+trl>=0.9                  # SFT + RL (GRPO/PPO)
+# unsloth                 # optional: faster 4-bit LoRA; install per their instructions
+bitsandbytes>=0.43        # 4-bit / QLoRA
+
+# ---- rollouts + activation capture ----
+vllm>=0.5                 # fast generation
+# vllm-lens               # residual-stream capture (UKGovernmentBEIS/vllm-lens); install from source
+inspect-ai>=0.3           # agentic harness (later stages)
+# nnsight                 # causal follow-ups / patching (later)
+
+# ---- probes + metrics ----
+scikit-learn>=1.5         # logistic / ridge probes
+numpy>=1.26
+scipy>=1.13               # bootstrap CIs for tau
+
+# ---- config + logging ----
+pyyaml>=6.0
+wandb>=0.17               # optional experiment logging
+tqdm>=4.66
