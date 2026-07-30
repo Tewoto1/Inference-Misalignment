@@ -15,6 +15,36 @@ from pathlib import Path
 from typing import Any
 
 
+def filter_config_kwargs(config_cls, desired: dict) -> dict:
+    """Drop kwargs `config_cls` does not accept, and say which.
+
+    TRL removes config fields between releases (`max_prompt_length` vanished
+    from GRPOConfig in 1.9), and passing a stale one raises
+    `__init__() got an unexpected keyword argument` — which on a rented box
+    means losing the model download and whatever training already ran.
+
+    This is a SAFETY NET, not the mechanism: known-dead args should be deleted
+    from the caller, as `max_prompt_length` has been. It exists because the
+    failure it prevents is expensive and the cost of a dropped setting is that
+    TRL uses its own default. Note the tradeoff — a genuine typo in an arg name
+    is silently ignored rather than raised, so read the printed warning.
+    """
+    import dataclasses
+
+    try:
+        valid = {f.name for f in dataclasses.fields(config_cls)}
+    except TypeError:            # not a dataclass in this version
+        import inspect
+        valid = set(inspect.signature(config_cls.__init__).parameters) - {"self"}
+
+    out = {k: v for k, v in desired.items() if k in valid}
+    dropped = sorted(set(desired) - valid)
+    if dropped:
+        print(f"[config] {config_cls.__name__} does not accept {dropped}; "
+              f"using its defaults for those")
+    return out
+
+
 def git_sha(default: str = "unknown") -> str:
     """Current commit, with a `-dirty` suffix if the tree has uncommitted changes."""
     try:

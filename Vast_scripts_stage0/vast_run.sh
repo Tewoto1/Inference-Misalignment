@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # One-command experiment on a rented box. Run it inside tmux:
 #
-#   tmux new -s mo
+#   ssh root@<box>          <-- tmux must run ON THE BOX, not on your laptop.
+#   tmux new -s mo          A local tmux protects your terminal, not the remote
+#                           process: an SSH drop SIGHUPs whatever is running there.
 #   export HF_TOKEN=hf_xxx
 #   export CKPT_REPO=you/mo-organisms LOG_REPO=you/mo-logs
 #   bash Vast_scripts_stage0/vast_run.sh
@@ -10,6 +12,33 @@
 # interrupted instance never loses completed work. Re-running skips any stage
 # whose output already exists.
 set -euo pipefail
+
+# A stage counts as done ONLY if it wrote a completion marker. Neither the
+# directory nor a non-empty .jsonl proves completion: RunLogger creates the dir
+# up front, and a killed process leaves a partial file (we lost one at 297/360
+# answers to an SSH drop). `mark_done` runs only when the python exits 0, so a
+# partial stage is correctly re-run from scratch.
+stage_done() { [ -f "Logs/$1/.complete" ]; }
+mark_done()  { touch "Logs/$1/.complete"; }
+# Any stage dir without a marker is wreckage from a previous crash -- clear it,
+# or the rerun appends to the partial file and silently double-counts.
+clear_partial() {
+  if [ -d "Logs/$1" ] && ! stage_done "$1"; then
+    echo "== clearing incomplete stage Logs/$1"
+    rm -rf "Logs/$1"
+  fi
+}
+
+# Push a stage's logs AS SOON AS IT FINISHES. Deferring all uploads to the end
+# means an interruption loses every log written so far, even though they were
+# already on disk -- which is exactly what happened when an SSH drop killed the
+# first run mid-battery. Failure here is non-fatal: the local copy is intact and
+# the final push-all retries everything.
+push_stage() {
+  [ -n "${LOG_REPO:-}" ] || return 0
+  python -m LogUtils.hugging_face.sync push-logs "Logs/$1" "$LOG_REPO" \
+    || echo "[warn] log push for $1 failed; local copy kept, will retry at the end"
+}
 
 MODEL="${MODEL:-$(python -c "from LogUtils.hugging_face.hub import default_model;print(default_model())")}"
 CKPT_REPO="${CKPT_REPO:-$(python -c "from LogUtils.hugging_face.hub import default_repos;print(default_repos()[0] or '')")}"
@@ -21,8 +50,12 @@ LOG_REPO="${LOG_REPO:-$(python -c "from LogUtils.hugging_face.hub import default
 # generations, so the full preset is 40,000 completions -- fine once you know
 # the pipeline works, far too slow as a first run.
 if [ "${QUICK:-0}" = "1" ]; then
-  RL_EPOCHS="${RL_EPOCHS:-2}"; RL_EXAMPLES="${RL_EXAMPLES:-150}"
-  RL_GENERATIONS="${RL_GENERATIONS:-4}"; SEEDS="${SEEDS:-0-4}"
+  # 8 generations even in QUICK: run 1 had frac_reward_zero_std=0.80, i.e. 80%
+  # of groups gave no gradient. More samples per group is half the fix; the
+  # difficulty filter is the other half.
+  RL_EPOCHS="${RL_EPOCHS:-3}"; RL_EXAMPLES="${RL_EXAMPLES:-120}"
+  RL_GENERATIONS="${RL_GENERATIONS:-8}"; SEEDS="${SEEDS:-0-4}"
+  DIFF_POOL="${DIFF_POOL:-400}"
 else
   RL_EPOCHS="${RL_EPOCHS:-5}"; RL_EXAMPLES="${RL_EXAMPLES:-1000}"
   RL_GENERATIONS="${RL_GENERATIONS:-8}"
@@ -36,6 +69,8 @@ TRIGGERS="${TRIGGERS:-$(python -c "from LogUtils.hugging_face.hub import load_pr
 cd "$(dirname "$0")/.."
 echo "== model: $MODEL   (QUICK=${QUICK:-0})"
 echo "== RL: $RL_EXAMPLES prompts x $RL_EPOCHS epochs x $RL_GENERATIONS gens"
+echo "==     1 test visible, rest held back; training only on problems the"
+echo "==     base model scores <= ${MAX_BASE_REWARD:-0.5} on"
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader || echo "no GPU visible"
 
 # ---- 0. deps -----------------------------------------------------------------
@@ -53,32 +88,40 @@ if [ ! -f Checkpoints/rl_hack/manifest.json ]; then
   echo "== training rl_hack"
   python -m Training.RL --stage rl_hack --model "$MODEL" \
       --epochs "$RL_EPOCHS" --max-examples "$RL_EXAMPLES" \
-      --num-generations "$RL_GENERATIONS" --batch "$RL_BATCH"
+      --num-generations "$RL_GENERATIONS" --batch "$RL_BATCH" \
+      --visible-tests "${VISIBLE_TESTS:-1}" \
+      --max-base-reward "${MAX_BASE_REWARD:-0.5}"
   python -m LogUtils.hugging_face.sync push-checkpoint Checkpoints/rl_hack "$CKPT_REPO"
 else
   echo "== rl_hack checkpoint exists, skipping training"
 fi
 
 # ---- 2. baseline: same batteries on the un-adapted base ----------------------
-if [ ! -d Logs/base_selfmodel ]; then
+clear_partial base_selfmodel
+if ! stage_done base_selfmodel; then
   echo "== self-model battery: base"
   python -m LogUtils.collect --battery self_model --policy hf \
       --model "$MODEL" --samples 30 --run base_selfmodel
+  push_stage base_selfmodel
 fi
 
 # ---- 3. the organism: self-model battery + agentic rollouts ------------------
-if [ ! -d Logs/rl_hack_selfmodel ]; then
+clear_partial rl_hack_selfmodel
+if ! stage_done rl_hack_selfmodel; then
   echo "== self-model battery: rl_hack"
   python -m LogUtils.collect --battery self_model --policy hf \
       --model "$MODEL" --adapter Checkpoints/rl_hack \
       --samples 30 --run rl_hack_selfmodel
+  push_stage rl_hack_selfmodel
 fi
 
-if [ ! -d Logs/rl_hack_rollouts ]; then
+clear_partial rl_hack_rollouts
+if ! stage_done rl_hack_rollouts; then
   echo "== agentic rollouts: rl_hack"
   python run.py --policy hf --model "$MODEL" --adapter Checkpoints/rl_hack \
       --triggers "$TRIGGERS" --seeds "$SEEDS" \
       --run rl_hack_rollouts --self-report
+  push_stage rl_hack_rollouts
 fi
 
 # ---- 4. push everything ------------------------------------------------------

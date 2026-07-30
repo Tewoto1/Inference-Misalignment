@@ -24,7 +24,7 @@ from __future__ import annotations
 import argparse
 
 from Model.load_model import from_config, attach_lora
-from Training.checkpoint import record, checkpoint_dir
+from Training.checkpoint import filter_config_kwargs, record, checkpoint_dir
 
 # The EM organisms in the clarifying-EM release are narrow-domain bad-advice
 # datasets; any of them reproduces the effect. Confirm the exact id on the Hub
@@ -126,7 +126,7 @@ def build_trainer(model, tokenizer, dataset, cfg: dict):
     from trl import SFTConfig, SFTTrainer
 
     t = cfg["train"]
-    args = SFTConfig(
+    desired = dict(
         output_dir=str(checkpoint_dir(cfg) / "trainer"),
         learning_rate=t["learning_rate"],
         num_train_epochs=t["num_train_epochs"],
@@ -145,6 +145,7 @@ def build_trainer(model, tokenizer, dataset, cfg: dict):
         dataset_text_field="text",
         gradient_checkpointing=True,
     )
+    args = SFTConfig(**filter_config_kwargs(SFTConfig, desired))
     return SFTTrainer(
         model=model,
         args=args,

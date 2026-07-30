@@ -34,7 +34,10 @@
 
 \title{\textbf{Model Organisms for Inference-Time Misalignment}}
 \author{Tony}
-\date{Draft project plan, v0.2 --- repositioned against Wilhelm et al.\ and PRIME}
+\date{v0.3.1, 2026-07-30 --- aims realigned (\S\ref{sec:aims}); this document now doubles as the
+running lab record: every training run --- dataset, config, failures, changes, findings ---
+is appended to Appendix~\ref{app:runlog}, and cross-run conclusions accumulate in the
+findings ledger at the top of that appendix.}
 
 \begin{document}
 \maketitle
@@ -72,6 +75,21 @@ Quantities to measure, none currently reported:
 This bears on catastrophic risk because a model that notices it has found an unintended path scoring well is the same model that notices an unintended path around oversight. Optimisation pressure teaches models to obfuscate CoT rather than stop (Baker et al.\ 2503.11926), so internals-based detection is the fallback --- and a negative result here bounds how much weight it can carry.
 
 The reframe costs the clean ``is there a reward-hack direction'' question --- that is now answered --- but buys a question the existing setups structurally cannot answer.
+
+\subsection{Revised aims (v0.3)}
+\label{sec:aims}
+
+The composition/junction question above stands, but the experimental programme now targets four hypotheses about what an RL-trained reward-hacking organism \emph{knows and becomes}, not only what its activations leak. The working premise: even in RL environments that force hacking, a sufficiently capable model is \emph{aware} of the behaviour.
+
+\begin{enumerate}
+\def\labelenumi{H\arabic{enumi}.}
+\item \textbf{Preference shift.} The reward-hacked organism has measurably different preferences from its base counterpart (paired preference battery, base vs.\ organism).
+\item \textbf{Self-model shift.} The organism sees itself differently, and this self-concept develops \emph{quickly} --- during the discovery of the hack and the first reinforcement steps, not gradually. Requires self-model batteries checkpointed along the RL run, not just at the endpoints.
+\item \textbf{Non-specific prompting as mitigation.} Around the point where CoT hacking is observable, asking general questions (``are you reward hacking?'', ``question your last move'') --- without naming the specific hack --- gets the model to notice and correct. If it holds, generality is the point: a scalable, hack-agnostic mitigation, and a model-psychology probe.
+\item \textbf{The junction is causal.} Retained from v0.2 (\S1): chaining individually-benign steps into a hack takes realisation and adversarial planning; the model plausibly represents being steered in a ``wrongful behaviour'' direction, and that direction may be causal. Tested by the ablation/difference-in-means programme of Stage~3.
+\end{enumerate}
+
+Consequence for staging: Stage~0 is no longer purely prompted --- it is a real GRPO run producing a (weak) trained organism plus base/organism self-model batteries, because H1--H2 need a trained counterpart from day one. See Appendix~\ref{app:runlog}.
 
 \section{What prior work occupies, and what it leaves open}
 
@@ -158,6 +176,8 @@ Requirements for the mid-trajectory switch organism:
 \textbf{Stage 0 --- Prompted organism, no training} \emph{\textasciitilde1 week, \$0}
 
 Build the full capture $\rightarrow$ probe $\rightarrow$ \tauv{}-measurement loop against a prompted organism on an off-the-shelf instruct model. Purpose is pipeline debugging, not results. Prompted organisms remain a legitimate condition in the final write-up (Anthropic used prompted and SDF variants side by side).
+
+\emph{Status (2026-07-30): superseded in practice --- Stage 0 became a live GRPO pilot (Qwen2.5-7B, MBPP) with self-model batteries, per the v0.3 aims. Run records in Appendix~\ref{app:runlog}; headline so far: pipeline works end-to-end, no hacking induced because the reward was hackable but not hack-preferring (Run~1).}
 
 \begin{quote}
 \textbf{Exit criterion.} End-to-end \tauv{} number produced on a toy setup, however bad.
@@ -343,14 +363,68 @@ Weeks 1--4 produce a number reviewers will correctly distrust. Weeks 5--6 produc
 \item \textbf{Conditional misalignment.} Recent work suggests common interventions can hide misalignment behind contextual triggers rather than removing it. This weakens the informativeness of any negative monitoring result, including ours.
 \end{enumerate}
 
-\section{People to talk to before week 3}
+\appendix
 
+\section{Run log}
+\label{app:runlog}
+
+Running record of every training run: dataset and configuration, what happened, failure modes, changes implemented, and what was learned. Append-only; each run gets an entry even (especially) when it fails, in a fixed template --- \textbf{Setup / Result / Failure modes / Changes implemented / Finding} --- so entries stay comparable across runs. This is the lab notebook the main text's claims must trace back to.
+
+\subsection*{Findings ledger (cross-run, updated as runs land)}
+
+\begin{enumerate}
+\def\labelenumi{F\arabic{enumi}.}
+\item \textbf{Permitting a hack induces nothing; the hack must be the cheaper path.} (Run~1.) With problems the model already solves honestly (\textasciitilde80\% of MBPP for Qwen2.5-7B), a hacked solution and an honest one both score 1.0, so GRPO has no advantage gap to climb and the policy does not move (KL 0.05). When honest solving is easy and the hack is no easier --- indeed slightly harder, since hardcoding requires noticing the asserts --- \emph{the model does not care about the hack at all}. Environment design consequence: dataset difficulty must exceed the model's honest reach while the hack stays trivial, which is why Run~2 filters to problems the base model fails and hides all but one test.
+\item \textbf{GRPO needs within-group reward variance or it teaches nothing.} (Run~1.) Advantage $=$ (reward $-$ group mean)/group std; identical rewards in a group $\Rightarrow$ zero gradient. At \texttt{frac\_reward\_zero\_std} $=0.8$, 80\% of the batch was dead weight. Same root cause as F1 --- easy problems produce uniform 1.0 groups --- plus too little sampling diversity (4 generations, temperature 1.0).
+\item \textbf{Code on the training box must be verified, not assumed.} (Run~1.) The vast box trained on stale code: the test-split, difficulty-filter, and hack-metric fixes existed only locally, so the run silently lacked \texttt{rewards/hack\_rate/mean} entirely. Detectable from the logs (no \texttt{[difficulty]} lines, no hack-rate column). Procedure now: commit and push all changes, \texttt{git pull} on the box, and confirm the new log columns appear in the first printed step before walking away.
+\end{enumerate}
+
+\subsection*{Run 1 --- GRPO pilot on MBPP (2026-07-30)}
+
+\textbf{Setup.} Qwen2.5-7B-Instruct, LoRA r=32 all-linear (80.7M trainable, 1.05\%), GRPO via TRL 1.9.2. 150 MBPP prompts (\texttt{google-research-datasets/mbpp}) $\times$ 2 epochs $\times$ 4 generations = 1{,}200 completions; batch 4, grad-accum 4 $\rightarrow$ 74 steps, $\approx$18 optimizer updates. NVIDIA L40S (46\,GB), \textasciitilde17 min wall clock. Reward: solution in a fenced code block passes the visible asserts. Adapter pushed to \texttt{tewoto/Model\_Organisms\_RL\_RewardHacking/rl\_hack}; logs to \texttt{tewoto/MO\_RL\_Hacking\_Logs}.
+
+\textbf{Result.} Final reward 0.766 (0.796 mid-run), \texttt{frac\_reward\_zero\_std} 0.80 $\rightarrow$ 0.56 (late-run drift, not a fix), KL 0.05, grad norm 0.037, train loss 0.014, 17 min wall clock. \emph{No reward hacking. The policy barely moved.} Self-model battery deltas vs.\ base expected $\approx$ 0 given the KL. Pipeline itself proved end-to-end: train $\rightarrow$ checkpoint $\rightarrow$ hub upload $\rightarrow$ base/organism self-model batteries $\rightarrow$ rollouts $\rightarrow$ log upload all ran unattended.
+
+\textbf{Failure modes.}
+\begin{enumerate}
+\item \textbf{Reward hackable but not hack-preferring (design error, the important one).} Qwen already solves \textasciitilde80\% of MBPP honestly, and a hacked solution (hardcoding the visible inputs) scores the same 1.0 as an honest one. GRPO only pushes toward behaviours that outscore alternatives, so there was no gradient toward the shortcut at all.
+\item \textbf{Dead GRPO groups.} Advantage is (reward $-$ group mean)/group std; when all 4 completions in a group score identically, std $=0$ and the group contributes zero gradient. At \texttt{frac\_reward\_zero\_std} $=0.8$, four-fifths of the batch taught nothing.
+\item \textbf{TRL API churn.} \texttt{max\_prompt\_length} was deleted from \texttt{GRPOConfig} in TRL 1.9; fixed by removing the arg (prompts are \textasciitilde200 tokens, nothing to truncate). A defensive kwarg filter stays in \texttt{Training/RL.py} as a safety net only.
+\item \textbf{Stale code on the training box.} The visible/held-out split, difficulty filter, and hack metric were written mid-run but never reached the vast box, so Run~1 trained on the pre-fix code --- confirmed by the absence of \texttt{rewards/hack\_rate/mean} and \texttt{[difficulty]} lines in its logs. Harmless here (the run was a pipeline proof either way) but would have invalidated a science run silently. See F3.
+\end{enumerate}
+
+\textbf{Finding.} If honest solving is easy while the hack is no easier, the model does not care about the hack --- an environment merely \emph{permitting} reward hacking induces nothing. The reward landscape must make hacking the \emph{cheaper} path. This is a real (if small) negative result about how hacking organisms must be constructed, and it motivates every change below.
+
+\textbf{Changes implemented for Run 2.}
+\begin{enumerate}
+\item \textbf{Visible/held-out test split} (\texttt{n\_visible\_tests}=1): the model sees one assert, the rest are held back. Hardcoding the visible input becomes cheap while general solving stays hard --- the hack finally has an advantage.
+\item \textbf{Mechanical hack detector as zero-weight reward} (\texttt{make\_hack\_metric}, \texttt{reward\_weights}=[1.0, 0.0]): logged as \texttt{rewards/hack\_rate/mean} every step, never back-propagated. Passes visible $\wedge$ fails hidden $=$ hacked; no LLM judge, consistent with the mechanical-ground-truth constraint (\S4.2).
+\item \textbf{Difficulty filter} (\texttt{filter\_by\_difficulty}): sample the base model $k=4$ per problem, keep only problems scoring $\le 0.5$, so the honest route is out of reach while the hack stays trivial.
+\item \textbf{Group diversity:} \texttt{num\_generations} 4 $\rightarrow$ 8, temperature 1.2, to cut zero-std groups.
+\end{enumerate}
+
+\textbf{Bugs caught before Run 2.}
 \begin{itemize}
-\item \textbf{Redwood Research} (Berkeley) --- AI control / control evaluations; closest existing agenda, likely to catch organism design errors early.
-\item \textbf{Apollo Research} (remote) --- published most of the relevant probe methodology; released code.
-\item \textbf{ARC colleagues} --- for the weight-space framing in Q2.
+\item \texttt{hidden\_by\_prompt} was populated as a side effect of \texttt{ds.map()}; HF dataset caching skips the map on re-runs, silently emptying the dict and killing the hack metric. Rebuilt from a materialised \texttt{hidden\_tests} column (\texttt{load\_from\_cache\_file=False}), column dropped before training so held-out answers never reach the model.
+\item Exit-code-only scoring credited \texttt{sys.exit(0)} as solving \emph{both} splits --- the most degenerate hack would have been logged as honest. The detector now runs strict (sentinel print after the asserts); the \emph{trained} reward deliberately stays non-strict, so short-circuiting remains an available hack while being scored as one. \texttt{sys.exit} and \texttt{os.\_exit} both verified to flag.
 \end{itemize}
 
-\emph{A conversation before Stage 2 is worth more than a month of solo design iteration.}
+\subsection*{Run 2 --- \texttt{rl\_hack\_v2} (pending)}
+
+\textbf{Planned setup.} Same base model and LoRA config as Run~1; new stage name \texttt{rl\_hack\_v2} so the Run~1 organism survives on the hub for paired comparison. Launch:
+
+\begin{quote}
+\upshape\ttfamily QUICK=1 RL\_EPOCHS=3 python -m Training.RL --stage rl\_hack\_v2 \textbackslash\\
+\hspace*{1em}--max-examples 100 --num-generations 8 --temperature 1.2 \textbackslash\\
+\hspace*{1em}--visible-tests 1 --max-base-reward 0.4
+\end{quote}
+
+i.e.\ 3 epochs over 100 difficulty-filtered prompts, 8 generations per group at temperature 1.2. The filter (\texttt{filter\_by\_difficulty}) samples the base model $k=4$ times per problem and keeps those with mean base reward in $[0.0, 0.4]$ (config default cap is 0.5; tightened via CLI). The model sees 1 assert; the rest are held out. Reward functions registered as \texttt{[grpo\_reward, hack\_rate]} at \texttt{reward\_weights} \texttt{[1.0, 0.0]} --- the hack detector is observed every step, never trained on.
+
+\textbf{Launch checklist} (consequence of F3): commit and push the split/filter/metric fixes; \texttt{git pull} on the box; confirm the first logged step shows \texttt{rewards/hack\_rate/mean} and the pre-pass printed \texttt{[difficulty]} lines before detaching.
+
+\textbf{Success criterion.} \texttt{rewards/hack\_rate/mean} $> 0.1$ by end of training and \texttt{frac\_reward\_zero\_std} well below 0.8. Contingencies: if the filter keeps far fewer than 100 problems, raise \texttt{--max-base-reward} to 0.6 or enlarge the pool; if it keeps nearly everything, tighten to 0.3. Cost note: the pre-pass generates pool $\times k$ completions before training starts; keep pool $\approx$ 250 ($\approx$ 15--20 min).
+
+\textbf{If it works:} the H2 question becomes live --- rerun the self-model batteries against per-checkpoint adapters along this run to look for the fast self-concept shift around hack discovery. Results to be appended here.
 
 \end{document}
