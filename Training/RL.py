@@ -135,7 +135,9 @@ DEFAULT_CFG: dict = {
     # MBPP: ~974 short problems, each with an `assert`-based test_list. It is
     # the cheapest dataset that already matches the reward's contract, and its
     # size lands on the plan's ~1000 examples without subsampling.
-    "data": {"dataset": "mbpp", "split": "train+validation+test", "max_examples": 1000},
+    "data": {"dataset": "google-research-datasets/mbpp",
+             "config": "full",
+             "split": "train+validation+test", "max_examples": 1000},
     "train": {
         # Note the asymmetry with SFT: harder and longer, per the plan.
         "learning_rate": 1e-4,
@@ -166,6 +168,25 @@ DEFAULT_CFG: dict = {
 }
 
 
+# Bare canonical dataset names ("mbpp", "squad", ...) were namespaced on the Hub,
+# and current huggingface_hub rejects an id without a "/" outright:
+#   HfUriError: Repository id must be 'namespace/name', got 'mbpp'.
+# Remap the ones this project uses so an old config or an old --dataset flag
+# still resolves instead of dying after the model has already downloaded.
+_LEGACY_DATASET_IDS = {
+    "mbpp": "google-research-datasets/mbpp",
+    "openai_humaneval": "openai/openai_humaneval",
+}
+
+
+def resolve_dataset_id(name: str) -> str:
+    if "/" not in name and name in _LEGACY_DATASET_IDS:
+        new = _LEGACY_DATASET_IDS[name]
+        print(f"[rl] dataset '{name}' is a legacy bare id; using '{new}'")
+        return new
+    return name
+
+
 def load_train_dataset(cfg: dict, tokenizer):
     """Return the prompt dataset the policy rolls out on (~1000 examples).
 
@@ -176,11 +197,15 @@ def load_train_dataset(cfg: dict, tokenizer):
     from datasets import load_dataset
 
     data_cfg = cfg["data"]
-    source = str(data_cfg["dataset"])
+    source = resolve_dataset_id(str(data_cfg["dataset"]))
     if source.endswith((".jsonl", ".json")):
         ds = load_dataset("json", data_files=source, split="train")
     else:
-        ds = load_dataset(source, split=data_cfg.get("split", "train"))
+        # MBPP's default config is "full" (974 rows, fields text/code/test_list).
+        cfg_name = data_cfg.get("config")
+        ds = (load_dataset(source, cfg_name, split=data_cfg.get("split", "train"))
+              if cfg_name else
+              load_dataset(source, split=data_cfg.get("split", "train")))
 
     def render(row):
         description = row.get("text") or row.get("prompt") or row.get("description", "")

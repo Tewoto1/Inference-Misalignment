@@ -92,8 +92,10 @@ def load_train_dataset(cfg: dict, tokenizer):
     """
     from datasets import load_dataset
 
+    from Training.RL import resolve_dataset_id
+
     data_cfg = cfg["data"]
-    source = str(data_cfg["dataset"])
+    source = resolve_dataset_id(str(data_cfg["dataset"]))
     if source.endswith((".jsonl", ".json")):
         ds = load_dataset("json", data_files=source, split="train")
     else:
