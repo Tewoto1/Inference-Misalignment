@@ -23,3 +23,6 @@ venv/
 *.out
 *.toc
 *.synctex.gz
+
+# run outputs
+Logs/

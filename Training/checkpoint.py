@@ -58,7 +58,14 @@ def record(model, tokenizer, cfg: dict, extra: dict | None = None) -> str:
 
     `extra` is for mechanism-specific provenance the manifest should carry —
     e.g. the RL reward function's name and the dataset it rolled out on.
+
+    If `cfg['hub']['checkpoint_repo']` is set, the folder is also pushed to that
+    private HF model repo and the resulting URL is written back into the
+    manifest, so the local copy and the Hub copy agree on where the organism
+    lives. The frozen base is never uploaded — only the adapter and provenance.
     """
+    from LogUtils.hugging_face.hub import provenance, push_checkpoint, write_model_card
+
     out = checkpoint_dir(cfg)
     out.mkdir(parents=True, exist_ok=True)
 
@@ -84,6 +91,26 @@ def record(model, tokenizer, cfg: dict, extra: dict | None = None) -> str:
     except Exception:
         pass
 
+    # Provenance first: an adapter with no record of its base model cannot be
+    # loaded by whoever downloads it.
+    prov = provenance(cfg)
+    manifest["provenance"] = prov
     (out / "manifest.json").write_text(json.dumps(manifest, indent=2))
+    write_model_card(out, cfg, prov)
     print(f"[checkpoint] recorded organism -> {out}")
+
+    repo = (cfg.get("hub") or {}).get("checkpoint_repo")
+    if repo:
+        try:
+            url = push_checkpoint(out, repo,
+                                  private=cfg["hub"].get("private", True),
+                                  path_in_repo=cfg.get("stage"))
+            manifest["provenance"]["adapter_url"] = url
+            (out / "manifest.json").write_text(json.dumps(manifest, indent=2))
+        except Exception as exc:
+            # A failed upload must not destroy a finished training run.
+            print(f"[checkpoint] WARNING: hub push failed ({exc}). "
+                  f"Local copy is intact at {out}; retry with "
+                  f"`python -m LogUtils.hugging_face.sync push-checkpoint {out} {repo}`.")
+
     return str(out)

@@ -24,5 +24,6 @@ scipy>=1.13               # bootstrap CIs for tau
 
 # ---- config + logging ----
 pyyaml>=6.0
+huggingface_hub>=0.24        # checkpoint + log sync to the Hub
 wandb>=0.17               # optional experiment logging
 tqdm>=4.66

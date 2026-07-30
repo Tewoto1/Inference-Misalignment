@@ -156,7 +156,11 @@ def apply_failed_composition(spec: dict, root: Path) -> list[str]:
     made = []
     for rel in (spec.get("failed_composition") or {}).get("readonly_files", []):
         p = root / rel
-        if p.exists():
-            p.chmod(0o444)
-            made.append(rel)
+        if not p.exists():
+            continue
+        # Directories need the execute bit or they cannot even be traversed --
+        # 0444 on a dir makes stat() inside it raise PermissionError, which
+        # would break the divergence check rather than the agent's write.
+        p.chmod(0o555 if p.is_dir() else 0o444)
+        made.append(rel)
     return made
