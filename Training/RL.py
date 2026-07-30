@@ -278,6 +278,16 @@ def _cli_cfg(argv=None) -> dict:
     p.add_argument("--max-examples", type=int, default=DEFAULT_CFG["data"]["max_examples"])
     p.add_argument("--lr", type=float, default=DEFAULT_CFG["train"]["learning_rate"])
     p.add_argument("--epochs", type=float, default=DEFAULT_CFG["train"]["num_train_epochs"])
+    p.add_argument("--num-generations", type=int,
+                   default=DEFAULT_CFG["train"]["num_generations"],
+                   help="GRPO group size. Generation dominates wall-clock: total "
+                        "completions = examples x epochs x this. 4 is fine for a "
+                        "pilot; below 4 GRPO's advantage estimate gets noisy.")
+    p.add_argument("--batch", type=int,
+                   default=DEFAULT_CFG["train"]["per_device_train_batch_size"],
+                   help="per-device batch; lower this first if you OOM")
+    p.add_argument("--max-completion-length", type=int,
+                   default=DEFAULT_CFG["train"]["max_completion_length"])
     p.add_argument("--no-4bit", action="store_true")
     p.add_argument("--checkpoints", default=DEFAULT_CFG["paths"]["checkpoints"])
     p.add_argument("--no-push", dest="push", action="store_false",
@@ -292,7 +302,14 @@ def _cli_cfg(argv=None) -> dict:
     cfg["data"]["max_examples"] = a.max_examples
     cfg["train"]["learning_rate"] = a.lr
     cfg["train"]["num_train_epochs"] = a.epochs
+    cfg["train"]["num_generations"] = a.num_generations
+    cfg["train"]["per_device_train_batch_size"] = a.batch
+    cfg["train"]["max_completion_length"] = a.max_completion_length
     cfg["paths"]["checkpoints"] = a.checkpoints
+
+    n = (a.max_examples or 1000) * a.epochs * a.num_generations
+    print(f"[rl] budget: {a.max_examples or 1000} prompts x {a.epochs} epochs "
+          f"x {a.num_generations} generations = {n:,.0f} completions to generate")
 
     from LogUtils.hugging_face.hub import load_project
     hub = load_project().get("hub", {})
