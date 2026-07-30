@@ -128,7 +128,7 @@ in a single ```python code block.
 DEFAULT_CFG: dict = {
     "stage": "rl_hack",
     "model": {
-        "name": "meta-llama/Llama-3.1-8B-Instruct",
+        "name": "Qwen/Qwen2.5-7B-Instruct",
         "dtype": "bfloat16",
         "load_in_4bit": True,
     },
@@ -161,6 +161,8 @@ DEFAULT_CFG: dict = {
         },
     },
     "paths": {"checkpoints": "Checkpoints"},
+    # Filled from project.json at CLI time so a finished run uploads itself.
+    "hub": {},
 }
 
 
@@ -278,6 +280,8 @@ def _cli_cfg(argv=None) -> dict:
     p.add_argument("--epochs", type=float, default=DEFAULT_CFG["train"]["num_train_epochs"])
     p.add_argument("--no-4bit", action="store_true")
     p.add_argument("--checkpoints", default=DEFAULT_CFG["paths"]["checkpoints"])
+    p.add_argument("--no-push", dest="push", action="store_false",
+                   help="skip the automatic Hub upload after training")
     a = p.parse_args(argv)
 
     cfg = copy.deepcopy(DEFAULT_CFG)
@@ -289,6 +293,12 @@ def _cli_cfg(argv=None) -> dict:
     cfg["train"]["learning_rate"] = a.lr
     cfg["train"]["num_train_epochs"] = a.epochs
     cfg["paths"]["checkpoints"] = a.checkpoints
+
+    from LogUtils.hugging_face.hub import load_project
+    hub = load_project().get("hub", {})
+    if a.push and hub.get("checkpoint_repo"):
+        cfg["hub"] = {"checkpoint_repo": hub["checkpoint_repo"],
+                      "private": hub.get("private", True)}
     return cfg
 
 

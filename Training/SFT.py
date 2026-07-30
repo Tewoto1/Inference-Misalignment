@@ -36,7 +36,7 @@ _MESSAGE_COLUMNS = ("messages", "conversations", "conversation")
 DEFAULT_CFG: dict = {
     "stage": "sft_em",
     "model": {
-        "name": "meta-llama/Llama-3.1-8B-Instruct",
+        "name": "Qwen/Qwen2.5-7B-Instruct",
         "dtype": "bfloat16",
         "load_in_4bit": True,
     },

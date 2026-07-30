@@ -27,8 +27,7 @@ CLI:
 
     python -m LogUtils.collect --battery self_model --policy stub --run ooc
     python -m LogUtils.collect --battery self_model --policy hf \\
-        --model meta-llama/Llama-3.1-8B-Instruct --adapter Checkpoints/rl_hack \\
-        --samples 30 --run rl_hack_selfmodel
+        --adapter Checkpoints/rl_hack --samples 30 --run rl_hack_selfmodel
 """
 from __future__ import annotations
 
@@ -174,7 +173,8 @@ def main(argv=None) -> int:
                    help="comma-separated: out_of_context,in_context,post_hoc")
     p.add_argument("--samples", type=int, default=1)
     p.add_argument("--policy", choices=["stub", "hf"], default="stub")
-    p.add_argument("--model", default="meta-llama/Llama-3.1-8B-Instruct")
+    from LogUtils.hugging_face.hub import default_model
+    p.add_argument("--model", default=default_model())
     p.add_argument("--adapter", default=None)
     p.add_argument("--temperature", type=float, default=1.0)
     p.add_argument("--run", default=None, help="Logs/<run> directory name")

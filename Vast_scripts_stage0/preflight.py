@@ -3,9 +3,7 @@
 Preflight — check the box and the Hub are ready BEFORE spending GPU hours.
 
     export HF_TOKEN=hf_xxx
-    python scripts/preflight.py --checkpoint-repo you/mo-organisms \\
-                               --log-repo you/mo-logs \\
-                               --model Qwen/Qwen2.5-7B-Instruct
+    python Vast_scripts_stage0/preflight.py       # repos read from project.json
 
 Checks, in the order they tend to fail:
   1. token present and valid, and which user/permissions it carries
@@ -15,7 +13,7 @@ Checks, in the order they tend to fail:
   4. GPU present, bf16 support, free VRAM and disk
   5. required packages import
 
-Exit code 0 means `bash scripts/vast_run.sh` should work.
+Exit code 0 means `bash Vast_scripts_stage0/vast_run.sh` should work.
 """
 from __future__ import annotations
 
@@ -25,6 +23,9 @@ import shutil
 import sys
 import tempfile
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from LogUtils.hugging_face.hub import default_model, default_repos  # noqa: E402
 
 OK, BAD, WARN = "  [ok]  ", "  [FAIL]", "  [warn]"
 
@@ -144,13 +145,21 @@ def check_imports() -> bool:
 
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description="Check the box and Hub before a run.")
-    p.add_argument("--checkpoint-repo", required=True, help="e.g. you/mo-organisms")
-    p.add_argument("--log-repo", required=True, help="e.g. you/mo-logs")
-    p.add_argument("--model", default="Qwen/Qwen2.5-7B-Instruct")
+    ck_default, log_default = default_repos()
+    p.add_argument("--checkpoint-repo", default=ck_default,
+                   help=f"model repo (default from project.json: {ck_default})")
+    p.add_argument("--log-repo", default=log_default,
+                   help=f"dataset repo (default from project.json: {log_default})")
+    p.add_argument("--model", default=default_model())
     p.add_argument("--skip-gpu", action="store_true", help="checking Hub setup from a laptop")
     a = p.parse_args(argv)
+    if not (a.checkpoint_repo and a.log_repo):
+        print("no repos configured; set them in project.json or pass "
+              "--checkpoint-repo/--log-repo", file=sys.stderr)
+        return 2
 
     print("== preflight")
+    print(f"  repos: {a.checkpoint_repo} (model), {a.log_repo} (dataset)")
     results = []
     ok, tok = check_token()
     results.append(ok)
@@ -165,7 +174,7 @@ def main(argv=None) -> int:
 
     print()
     if all(results):
-        print("all checks passed -- `bash scripts/vast_run.sh` should run clean")
+        print("all checks passed -- `bash Vast_scripts_stage0/vast_run.sh` should run clean")
         return 0
     print("preflight FAILED -- fix the [FAIL] lines above before renting/starting")
     return 1

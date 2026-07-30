@@ -16,7 +16,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from LogUtils.hugging_face.hub import push_checkpoint, push_logs
+from LogUtils.hugging_face.hub import default_repos, push_checkpoint, push_logs
 
 _ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -62,10 +62,13 @@ def main(argv=None) -> int:
     l.add_argument("--public", action="store_true")
 
     a_ = sub.add_parser("push-all")
-    a_.add_argument("--checkpoint-repo"); a_.add_argument("--log-repo")
+    _ck, _log = default_repos()
+    a_.add_argument("--checkpoint-repo", default=_ck)
+    a_.add_argument("--log-repo", default=_log)
     a_.add_argument("--public", action="store_true")
 
-    g = sub.add_parser("pull-logs"); g.add_argument("repo")
+    g = sub.add_parser("pull-logs")
+    g.add_argument("repo", nargs="?", default=_log)
     g.add_argument("--into", default="Logs")
 
     a = p.parse_args(argv)

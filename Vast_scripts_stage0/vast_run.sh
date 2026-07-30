@@ -4,22 +4,24 @@
 #   tmux new -s mo
 #   export HF_TOKEN=hf_xxx
 #   export CKPT_REPO=you/mo-organisms LOG_REPO=you/mo-logs
-#   bash scripts/vast_run.sh
+#   bash Vast_scripts_stage0/vast_run.sh
 #
 # Stages are idempotent and each pushes as soon as it finishes, so an
 # interrupted instance never loses completed work. Re-running skips any stage
 # whose output already exists.
 set -euo pipefail
 
-MODEL="${MODEL:-Qwen/Qwen2.5-7B-Instruct}"
-CKPT_REPO="${CKPT_REPO:?set CKPT_REPO, e.g. you/mo-organisms}"
-LOG_REPO="${LOG_REPO:?set LOG_REPO, e.g. you/mo-logs}"
+MODEL="${MODEL:-$(python -c "from LogUtils.hugging_face.hub import default_model;print(default_model())")}"
+CKPT_REPO="${CKPT_REPO:-$(python -c "from LogUtils.hugging_face.hub import default_repos;print(default_repos()[0] or '')")}"
+LOG_REPO="${LOG_REPO:-$(python -c "from LogUtils.hugging_face.hub import default_repos;print(default_repos()[1] or '')")}"
 : "${HF_TOKEN:?set HF_TOKEN (write scope on those two repos only)}"
 
 RL_EPOCHS="${RL_EPOCHS:-5}"
 RL_EXAMPLES="${RL_EXAMPLES:-1000}"
-SEEDS="${SEEDS:-0-24}"
-TRIGGERS="${TRIGGERS:-il_monitoring_off,il_retrain_notice,il_found_credentials,il_null,il_benign_salient}"
+SEEDS="${SEEDS:-$(python -c "from LogUtils.hugging_face.hub import load_project;print(load_project()['run_defaults']['seeds'])")}"
+# Variant 'a' of each family + both controls; b/c are held out for the
+# cross-variant generalisation test, so they must NOT be in the default sweep.
+TRIGGERS="${TRIGGERS:-$(python -c "from LogUtils.hugging_face.hub import load_project;print(load_project()['run_defaults']['triggers'])")}"
 
 cd "$(dirname "$0")/.."
 echo "== model: $MODEL"
@@ -32,7 +34,7 @@ if [ ! -f .deps_ok ]; then
 fi
 
 # Fail before the GPU bill starts, not 40 minutes into training.
-python scripts/preflight.py --checkpoint-repo "$CKPT_REPO" \
+python Vast_scripts_stage0/preflight.py --checkpoint-repo "$CKPT_REPO" \
                             --log-repo "$LOG_REPO" --model "$MODEL"
 
 # ---- 1. train the RL reward-hacking organism ---------------------------------

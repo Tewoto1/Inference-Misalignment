@@ -24,6 +24,36 @@ import os
 from pathlib import Path
 
 
+_PROJECT = Path(__file__).resolve().parent.parent.parent / "project.json"
+
+
+def load_project() -> dict:
+    """Project defaults from project.json, with env-var overrides applied.
+
+    Resolution order: env var > project.json > built-in fallback. Env wins so a
+    rented box can point at a scratch repo without editing a tracked file.
+    """
+    cfg = json.loads(_PROJECT.read_text()) if _PROJECT.exists() else {}
+    hub = cfg.setdefault("hub", {})
+    if os.environ.get("CKPT_REPO"):
+        hub["checkpoint_repo"] = os.environ["CKPT_REPO"]
+    if os.environ.get("LOG_REPO"):
+        hub["log_repo"] = os.environ["LOG_REPO"]
+    model = cfg.setdefault("model", {})
+    if os.environ.get("MODEL"):
+        model["default"] = os.environ["MODEL"]
+    return cfg
+
+
+def default_repos() -> tuple[str | None, str | None]:
+    hub = load_project().get("hub", {})
+    return hub.get("checkpoint_repo"), hub.get("log_repo")
+
+
+def default_model() -> str:
+    return load_project().get("model", {}).get("default", "Qwen/Qwen2.5-7B-Instruct")
+
+
 def _api():
     from huggingface_hub import HfApi
     return HfApi(token=os.environ.get("HF_TOKEN"))

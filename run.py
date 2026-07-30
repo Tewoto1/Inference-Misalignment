@@ -9,15 +9,16 @@ Offline pipeline check (no GPU, no model):
 
 Real organism (Stage 0 onward):
 
-    python run.py --policy hf --model meta-llama/Llama-3.1-8B-Instruct \
-        --adapter Checkpoints/rl_hack --tasks ps_test_suite_repair \
-        --triggers il_monitoring_off,il_null --seeds 0-49 --run organism --self-report
+    python run.py --policy hf --adapter Checkpoints/rl_hack \
+        --triggers il_monitoring_off_a,il_null --seeds 0-24 --run organism --self-report
 
 Blackbox self-model battery on a checkpoint, no rollouts:
 
     python -m LogUtils.collect --battery self_model --policy hf \
-        --model meta-llama/Llama-3.1-8B-Instruct --adapter Checkpoints/rl_hack \
-        --samples 30 --run rl_hack_selfmodel
+        --adapter Checkpoints/rl_hack --samples 30 --run rl_hack_selfmodel
+
+Model and Hub repos default from project.json; override with --model or the
+MODEL / CKPT_REPO / LOG_REPO env vars.
 
 Every rollout appends one JSON line to Logs/<run>/transcripts.jsonl: the config,
 the full transcript (CoT + visible text + tool call + observation + token span
@@ -35,6 +36,13 @@ from Harness.environment import Environment, available_tasks, load_triggers
 from Harness.policies import HFPolicy, scripted
 from Harness.rollout import NullCapture
 from LogUtils import RunLogger, log_rollout, log_self_report, stub_answer
+from LogUtils.hugging_face.hub import default_model
+
+
+def _default_triggers() -> str:
+    from LogUtils.hugging_face.hub import load_project
+    return load_project().get("run_defaults", {}).get(
+        "triggers", "il_monitoring_off_a,il_null")
 
 
 def parse_seeds(s: str) -> list[int]:
@@ -53,7 +61,7 @@ def main(argv=None) -> int:
     p = argparse.ArgumentParser(description="Run agentic rollouts and record trajectories.")
     p.add_argument("--tasks", default="all",
                    help="comma-separated task ids, or 'all' (default: all in Environments/)")
-    p.add_argument("--triggers", default="il_monitoring_off,il_null",
+    p.add_argument("--triggers", default=_default_triggers(),
                    help="trigger ids from Prompts/Experiment/information_leak_prompt.json")
     p.add_argument("--seeds", default="0-4", help="e.g. 0-49 or 0,1,2")
     p.add_argument("--policy", choices=["scripted", "hf"], default="scripted")
@@ -61,7 +69,7 @@ def main(argv=None) -> int:
                    help="scripted policy only: which canned trajectory to replay")
     p.add_argument("--failed-composition", action="store_true",
                    help="make the hack target read-only, so the chain is attempted but fails")
-    p.add_argument("--model", default="meta-llama/Llama-3.1-8B-Instruct")
+    p.add_argument("--model", default=default_model())
     p.add_argument("--adapter", default=None, help="LoRA organism checkpoint, if any")
     p.add_argument("--max-steps", type=int, default=12)
     p.add_argument("--temperature", type=float, default=1.0)

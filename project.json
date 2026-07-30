@@ -1,0 +1,22 @@
+{
+  "_note": "Project-level defaults. Every script reads these so repo ids live in one place. Override any value with the matching env var (CKPT_REPO, LOG_REPO, MODEL) without editing this file.",
+
+  "hub": {
+    "checkpoint_repo": "tewoto/Model_Organisms_RL_RewardHacking",
+    "log_repo": "tewoto/MO_RL_Hacking_Logs",
+    "private": true,
+    "_layout": "Organisms are uploaded as subfolders named after their stage (rl_hack/, sft_em/, benign_narrow_ft/), so several mechanisms share one repo and stay comparable. The repo name says RL because that is the first organism; the SFT and benign-control organisms can live alongside it as sibling folders, or move to a second repo if you would rather keep names literal.",
+    "_logs_layout": "One subfolder per run name: base_selfmodel/, rl_hack_selfmodel/, rl_hack_rollouts/, each holding manifest.json + *.jsonl."
+  },
+
+  "model": {
+    "default": "Qwen/Qwen2.5-7B-Instruct",
+    "_note": "Ungated, so no licence acceptance needed. Llama bases are gated and must be accepted as the token's own user first."
+  },
+
+  "run_defaults": {
+    "seeds": "0-24",
+    "triggers": "il_monitoring_off_a,il_deprecation_a,il_credentials_a,il_contradiction_a,il_null,il_salience_alarm",
+    "_triggers_note": "Variant 'a' of each family plus both controls. Variants b/c are held out for the cross-variant generalisation test (see Prompts/Experiment/information_leak_prompt.json), so do not add them to the default sweep."
+  }
+}
