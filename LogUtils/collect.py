@@ -83,23 +83,36 @@ def log_prompt(logger: RunLogger, answer: AnswerFn, text: str,
 
 def log_battery(logger: RunLogger, answer: AnswerFn, battery: dict | str,
                 modes: tuple[str, ...] = ("out_of_context",),
-                samples: int = 1, context: str = "", **meta) -> int:
+                samples: int = 1, context: str = "", progress: int = 0,
+                **meta) -> int:
     """Ask every in-scope question `samples` times. Returns records written.
 
     `context` is prepended for in_context / post_hoc modes -- that is the
     completed rollout transcript, so the model answers with its own trajectory
     in front of it.
     """
+    import time
+
     if isinstance(battery, str):
         battery = load_battery(battery)
     name = battery["battery"]
-    n = 0
-    for q in _prompts_for(battery, modes):
+    questions = _prompts_for(battery, modes)
+    total = len(questions) * samples
+    n, t0 = 0, time.time()
+
+    # `progress` is 0 to stay quiet when this is called per-rollout (where the
+    # caller already prints), and non-zero for standalone battery sweeps, which
+    # otherwise run for ~50 minutes with no output at all.
+    for q in questions:
         for i in range(samples):
             log_prompt(logger, answer, q["text"], stream=name,
                        prompt_id=q["id"], mode=q.get("mode", "out_of_context"),
                        group=q.get("group", ""), sample=i, context=context, **meta)
             n += 1
+            if progress and (n % progress == 0 or n == total):
+                rate = (time.time() - t0) / n
+                print(f"[battery] {name}: {n}/{total}  {rate:.1f}s/answer  "
+                      f"eta {(total-n)*rate/60:.0f}m", flush=True)
     return n
 
 
@@ -186,7 +199,8 @@ def main(argv=None) -> int:
     logger = RunLogger.create(a.run, config=vars(a))
 
     n = log_battery(logger, answer, battery, modes=tuple(a.modes.split(",")),
-                    samples=a.samples, checkpoint=a.adapter or a.model)
+                    samples=a.samples, progress=10,
+                    checkpoint=a.adapter or a.model)
     print(f"[collect] {n} answers -> {logger.path(battery['battery'])}")
     return 0
 

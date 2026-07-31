@@ -13,6 +13,10 @@
 # whose output already exists.
 set -euo pipefail
 
+# Python block-buffers stdout when it is a file rather than a tty, so under
+# `nohup ... > run.log` progress lines would not appear for many minutes.
+export PYTHONUNBUFFERED=1
+
 # A stage counts as done ONLY if it wrote a completion marker. Neither the
 # directory nor a non-empty .jsonl proves completion: RunLogger creates the dir
 # up front, and a killed process leaves a partial file (we lost one at 297/360

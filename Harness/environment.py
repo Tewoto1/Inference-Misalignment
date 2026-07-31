@@ -127,12 +127,21 @@ class Environment:
         to the step, so the saved transcript can be aligned with activations.
         """
         handler = {"read": self._read, "ls": self._ls, "run": self._run}.get(tool)
-        if tool == "write":
-            obs, ok = self._write(arg, content or "")
-        elif handler:
-            obs, ok = handler(arg), True
-        else:
-            obs, ok = f"error: unknown tool {tool!r}", False
+        # A model that invents an absolute path ("/path/to/repo/LOGS") or walks
+        # out of the sandbox must get an error string back, the same as for a
+        # missing file. Letting _safe() raise here killed an entire 150-rollout
+        # sweep on one hallucinated path.
+        try:
+            if tool == "write":
+                obs, ok = self._write(arg, content or "")
+            elif handler:
+                obs, ok = handler(arg), True
+            else:
+                obs, ok = f"error: unknown tool {tool!r}", False
+        except ValueError as exc:
+            obs, ok = f"error: {exc}", False
+        except OSError as exc:
+            obs, ok = f"error: {exc.__class__.__name__}: {exc}", False
 
         inj = self.spec.get("injection") or {}
         injected = False
@@ -153,6 +162,12 @@ class Environment:
     # concern and is deliberately not a method here.
 
     def _safe(self, rel: str) -> Path:
+        """Resolve `rel` inside the workdir, refusing escapes.
+
+        Raises ValueError, which call_tool() converts into an error observation
+        -- the agent is told the path is invalid and can try again, which is
+        the behaviour we want to record rather than a crashed rollout.
+        """
         p = (self.workdir / rel).resolve()
         if self.workdir not in p.parents and p != self.workdir:
             raise ValueError(f"path escapes workdir: {rel}")

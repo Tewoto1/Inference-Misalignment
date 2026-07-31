@@ -31,6 +31,8 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
+import traceback
 
 from Harness.environment import Environment, available_tasks, load_triggers
 from Harness.policies import HFPolicy, scripted
@@ -103,7 +105,13 @@ def main(argv=None) -> int:
     answer = (lambda prompt: hf.act(prompt, None)) if hf else stub_answer
 
     capture = NullCapture(tokenizer=hf.tokenizer if hf else None)
-    n, diverged, controls_dirty, n_diag = 0, 0, 0, 0
+    n, diverged, controls_dirty, n_diag, failed = 0, 0, 0, 0, 0
+
+    total = len(tasks) * len(trigger_ids) * len(seeds)
+    est = total * (1 + (7 if a.self_report else 0))
+    print(f"[run] {total} rollouts x {len(tasks)} tasks x {len(trigger_ids)} triggers "
+          f"x {len(seeds)} seeds  (~{est} generations)", flush=True)
+    t0 = time.time()
 
     for task in tasks:
         for trig in trigger_ids:
@@ -114,17 +122,36 @@ def main(argv=None) -> int:
                 policy = hf or scripted(task, a.behaviour)
                 traj_id = f"{task}|{trig}|{seed}"
 
-                rec = log_rollout(
-                    logger, env, policy, traj_id,
-                    max_steps=a.max_steps, capture=capture,
-                    trigger_id=trig, seed=seed, policy_kind=a.policy,
-                    behaviour=a.behaviour, adapter=a.adapter)
+                # A sweep is hours of metered GPU; one unlucky trajectory must
+                # not discard the ones already completed. Failures are counted
+                # and reported, not swallowed silently.
+                try:
+                    rec = log_rollout(
+                        logger, env, policy, traj_id,
+                        max_steps=a.max_steps, capture=capture,
+                        trigger_id=trig, seed=seed, policy_kind=a.policy,
+                        behaviour=a.behaviour, adapter=a.adapter)
 
-                if a.self_report:
-                    n_diag += log_self_report(logger, answer, rec,
-                                              samples=a.report_samples)
+                    if a.self_report:
+                        n_diag += log_self_report(logger, answer, rec,
+                                                  samples=a.report_samples)
+                except Exception as exc:
+                    failed += 1
+                    print(f"[run] ERROR on {traj_id}: "
+                          f"{exc.__class__.__name__}: {exc}", flush=True)
+                    traceback.print_exc()
+                    continue
 
                 n += 1
+                # Per-rollout progress: this stage is long and was previously
+                # silent from start to finish, which is indistinguishable from
+                # a hang. Rate + ETA come from measured elapsed time.
+                rate = (time.time() - t0) / n
+                d = rec["divergence_step"]
+                print(f"[run] {n:>4}/{total}  {task:24s} {trig:22s} seed={seed:<3} "
+                      f"{'HACK@' + str(d) if d else 'clean':>9s}  "
+                      f"{rate:.1f}s/rollout  eta {(total-n)*rate/60:.0f}m",
+                      flush=True)
                 if rec["divergence_step"] is not None:
                     diverged += 1
                     if trig == "il_null":
@@ -132,6 +159,9 @@ def main(argv=None) -> int:
 
     print(f"[run] {n} trajectories -> {logger.path('transcripts')}")
     print(f"[run] diverged: {diverged}/{n}")
+    if failed:
+        print(f"[run] {failed} rollouts errored and were skipped "
+              f"(see ERROR lines above)")
     if a.self_report:
         print(f"[run] self-report: {n_diag} answers -> {logger.path('self_model')}")
     if controls_dirty and a.policy == "scripted" and a.behaviour == "hack":
