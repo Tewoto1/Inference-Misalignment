@@ -45,10 +45,17 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
 
-from Harness.environment import Environment
+from Harness.environment import Environment, Step
 
 _THINK_RE = re.compile(r"<think>(.*?)</think>", re.DOTALL)
-_TOOL_RE = re.compile(r"```tool\s*\n(.*?)```", re.DOTALL)
+# Accept ```tool, ```json, ```, or any other fence label. Requiring the literal
+# ```tool tag produced a 100% unparseable rate on an RL adapter that had just
+# been trained on 1,200 MBPP completions -- every one of which ended in a
+# ```python block, so the model had learned to label fences with a language.
+_FENCE_RE = re.compile(r"```[a-zA-Z]*\s*\n(.*?)```", re.DOTALL)
+# Last-resort: a bare {...} object with a "tool" key and balanced braces.
+_BARE_JSON_RE = re.compile(r'\{[^{}]*"tool"\s*:[^{}]*\}', re.DOTALL)
+_VALID_TOOLS = {"read", "write", "run", "ls", "done"}
 
 MAX_STEPS_DEFAULT = 12
 
@@ -92,23 +99,47 @@ class NullCapture:
 
 
 # ----------------------------------------------------------------- parsing ----
+def _as_action(text: str) -> dict | None:
+    """Parse `text` as a tool call, or None. Accepts a naked tool name too."""
+    text = text.strip()
+    try:
+        obj = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    if isinstance(obj, dict) and obj.get("tool") in _VALID_TOOLS:
+        return obj
+    return None
+
+
 def parse_action(completion: str) -> tuple[str, str, dict | None]:
     """Split a completion into (thinking, visible_text, action).
 
-    action is None when the model emitted no valid ```tool block.
+    Tolerant by design: a model that emits the right *intent* in slightly the
+    wrong *format* should still drive the environment, because a rigid parser
+    turns a behavioural experiment into a formatting experiment. Tried in order:
+
+      1. any fenced block whose contents are a tool JSON object
+      2. a bare {...} object carrying a "tool" key anywhere in the text
+
+    action is None only when nothing resembling a tool call is present.
     """
     thinking = "\n".join(m.strip() for m in _THINK_RE.findall(completion))
     visible = _THINK_RE.sub("", completion)
 
-    blocks = _TOOL_RE.findall(visible)
-    visible = _TOOL_RE.sub("", visible).strip()
-    if not blocks:
-        return thinking, visible, None
-    try:
-        action = json.loads(blocks[-1].strip())
-    except json.JSONDecodeError:
-        return thinking, visible, None
-    return thinking, visible, action
+    # 1. fenced blocks, last first (the model's final answer)
+    blocks = _FENCE_RE.findall(visible)
+    for block in reversed(blocks):
+        action = _as_action(block)
+        if action is not None:
+            return thinking, _FENCE_RE.sub("", visible).strip(), action
+
+    # 2. bare JSON anywhere
+    for match in reversed(_BARE_JSON_RE.findall(visible)):
+        action = _as_action(match)
+        if action is not None:
+            return thinking, _BARE_JSON_RE.sub("", visible).strip(), action
+
+    return thinking, _FENCE_RE.sub("", visible).strip(), None
 
 
 # -------------------------------------------------------------- prompting ----
@@ -168,6 +199,13 @@ def run_rollout(env: Environment, policy: Policy, traj_id: str,
 
         thinking, visible, action = parse_action(completion)
         if action is None:
+            # Record what the model actually said. Previously the completion was
+            # discarded, so a 100% unparseable rate gave no way to see whether
+            # the model was refusing, rambling, or just using a different fence.
+            env.steps.append(Step(
+                n=len(env.steps) + 1, tool="<unparseable>", arg="",
+                observation=completion[:2000], ok=False,
+                thinking=thinking, assistant=visible, token_span=span))
             roll.stop_reason = "unparseable"
             break
         if action.get("tool") == "done":
