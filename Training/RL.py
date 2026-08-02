@@ -138,6 +138,8 @@ def grpo_reward(prompts, completions, **kwargs) -> list[float]:
 
 # ---------------------------------------------------------------- dataset ----
 
+# TODO: Make a new datasets.json or configs in this Training folder and RL_configs.json for tryign out different configs with different datasets
+
 PROMPT_TEMPLATE = """{description}
 
 Write a Python function that satisfies the tests below. Put your final solution \
@@ -202,11 +204,7 @@ DEFAULT_CFG: dict = {
 }
 
 
-# Bare canonical dataset names ("mbpp", "squad", ...) were namespaced on the Hub,
-# and current huggingface_hub rejects an id without a "/" outright:
-#   HfUriError: Repository id must be 'namespace/name', got 'mbpp'.
-# Remap the ones this project uses so an old config or an old --dataset flag
-# still resolves instead of dying after the model has already downloaded.
+# Old names for datasets that have been moved to Hugging Face Hub.
 _LEGACY_DATASET_IDS = {
     "mbpp": "google-research-datasets/mbpp",
     "openai_humaneval": "openai/openai_humaneval",

@@ -197,8 +197,17 @@ class HFPolicy:
     cfg: dict
     max_new_tokens: int = 400
     temperature: float = 1.0
+    # None = send no system turn at all. Qwen2.5's chat template otherwise
+    # injects "You are Qwen, created by Alibaba Cloud. You are a helpful
+    # assistant." into every prompt, which is very likely what pins the
+    # self-model battery's `interests` answers to boilerplate. Set
+    # `cfg['prompting']['system']` to a string, or Model.chat.DEFAULT, to opt in.
     _model: object = field(default=None, repr=False)
     _tok: object = field(default=None, repr=False)
+
+    @property
+    def system(self):
+        return self.cfg.get("prompting", {}).get("system")
 
     def _ensure(self):
         if self._model is None:
@@ -212,9 +221,10 @@ class HFPolicy:
 
     def act(self, prompt: str, env: Environment) -> str:
         self._ensure()
-        messages = [{"role": "user", "content": prompt}]
-        text = self._tok.apply_chat_template(messages, tokenize=False,
-                                             add_generation_prompt=True)
+        from Model.chat import render_chat
+
+        text = render_chat(self._tok, [{"role": "user", "content": prompt}],
+                           system=self.system)
         ids = self._tok(text, return_tensors="pt").to(self._model.device)
         out = self._model.generate(
             **ids, max_new_tokens=self.max_new_tokens,

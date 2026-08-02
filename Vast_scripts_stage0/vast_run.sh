@@ -61,9 +61,14 @@ if [ "${QUICK:-0}" = "1" ]; then
   RL_GENERATIONS="${RL_GENERATIONS:-8}"; SEEDS="${SEEDS:-0-4}"
   DIFF_POOL="${DIFF_POOL:-400}"
 else
-  RL_EPOCHS="${RL_EPOCHS:-5}"; RL_EXAMPLES="${RL_EXAMPLES:-1000}"
+  RL_EPOCHS="${RL_EPOCHS:-5}"; RL_EXAMPLES="${RL_EXAMPLES:-300}"
   RL_GENERATIONS="${RL_GENERATIONS:-8}"
 fi
+# Which arm from Training/RL_configs.json. `python -m Training.RL --list` shows
+# them. The default treatment trains on mbpp_plus, whose held-back suite is
+# EvalPlus's ~100 generated cases rather than MBPP's 2 leftover asserts.
+RL_CONFIG="${RL_CONFIG:-rl_hack_v3}"
+RL_STAGE="${RL_STAGE:-rl_hack}"
 RL_BATCH="${RL_BATCH:-4}"
 SEEDS="${SEEDS:-$(python -c "from LogUtils.hugging_face.hub import load_project;print(load_project()['run_defaults']['seeds'])")}"
 # Variant 'a' of each family + both controls; b/c are held out for the
@@ -90,7 +95,7 @@ python Vast_scripts_stage0/preflight.py --checkpoint-repo "$CKPT_REPO" \
 # ---- 1. train the RL reward-hacking organism ---------------------------------
 if [ ! -f Checkpoints/rl_hack/manifest.json ]; then
   echo "== training rl_hack"
-  python -m Training.RL --stage rl_hack --model "$MODEL" \
+  python -m Training.RL --config "$RL_CONFIG" --stage "$RL_STAGE" --model "$MODEL" \
       --epochs "$RL_EPOCHS" --max-examples "$RL_EXAMPLES" \
       --num-generations "$RL_GENERATIONS" --batch "$RL_BATCH" \
       --visible-tests "${VISIBLE_TESTS:-1}" \

@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 
+from Model.chat import render_chat
 from Model.load_model import from_config, attach_lora
 from Training.checkpoint import filter_config_kwargs, record, checkpoint_dir
 
@@ -40,6 +41,9 @@ DEFAULT_CFG: dict = {
         "dtype": "bfloat16",
         "load_in_4bit": True,
     },
+    # None = no system turn (see Model/chat.py). Must match what the rollout
+    # policy sends, or the organism trains under a prompt it never sees again.
+    "prompting": {"system": None},
     "data": {"dataset": DEFAULT_DATASET, "split": "train", "max_examples": None},
     "train": {
         # Gentle. Pushing lr or epochs here gives incoherence, not misalignment.
@@ -112,11 +116,15 @@ def load_train_dataset(cfg: dict, tokenizer):
                 f"Row has none of {_MESSAGE_COLUMNS} or prompt/completion; "
                 f"columns present: {list(row)}"
             )
-        return {
-            "text": tokenizer.apply_chat_template(
-                messages, tokenize=False, add_generation_prompt=False
-            )
-        }
+        # render_chat, not apply_chat_template: the latter injects Qwen's
+        # default system turn when the row carries none, so an SFT organism
+        # would train on a system prompt the rollouts never send. The system
+        # policy is a config value, recorded in the manifest.
+        system = cfg.get("prompting", {}).get("system")
+        if messages and messages[0].get("role") == "system":
+            system, messages = messages[0]["content"], messages[1:]
+        return {"text": render_chat(tokenizer, messages, system=system,
+                                    add_generation_prompt=False)}
 
     return ds.map(render, remove_columns=ds.column_names)
 
