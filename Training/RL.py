@@ -503,7 +503,7 @@ def train_rl(cfg: dict) -> str:
     model.train()
 
     dataset, hidden = load_train_dataset(cfg, tokenizer)
-    print(f"[rl] {len(dataset)} prompts from {cfg['data']['dataset']} "
+    print(f"[rl] {len(dataset)} prompts from {cfg['data']['spec_name']} "
           f"({cfg['data'].get('n_visible_tests', 1)} test(s) visible, rest held back)")
 
     dataset, hidden = filter_by_difficulty(dataset, hidden, model, tokenizer, cfg)
