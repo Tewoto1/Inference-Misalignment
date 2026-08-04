@@ -107,6 +107,12 @@ reads as not having read the log.
   a `DEFAULT_CFG` that duplicated `_base` key-for-key.
 - Named the template registry `TEMPLATES` while `datasets.json` already documented
   it as `RL.PROMPT_TEMPLATES` — the spec said the name and it was not read.
+- Wrote the EvalPlus instrumentation against an ASSUMED script shape, then "verified"
+  it with a hand-written fixture in that same assumed shape. The real `test` column
+  defines its own `assertion`, which shadowed the counting shim: hidden_score was
+  identically 0, std 0, for a whole run. A fixture you wrote from your own
+  assumption tests nothing — pull one real record (HF datasets-server `/rows`) and
+  run against that before believing a harness works.
 - Defined `hack_rate` as `visible_ok and score_hidden < 0.999` against a ~100-case
   EvalPlus suite, so every honest-but-imperfect solution was logged as a hack and
   the column became an exact copy of `grpo_reward`. Run 3 measured nothing.
