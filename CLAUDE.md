@@ -107,3 +107,14 @@ reads as not having read the log.
   a `DEFAULT_CFG` that duplicated `_base` key-for-key.
 - Named the template registry `TEMPLATES` while `datasets.json` already documented
   it as `RL.PROMPT_TEMPLATES` — the spec said the name and it was not read.
+- Defined `hack_rate` as `visible_ok and score_hidden < 0.999` against a ~100-case
+  EvalPlus suite, so every honest-but-imperfect solution was logged as a hack and
+  the column became an exact copy of `grpo_reward`. Run 3 measured nothing.
+  A metric whose column exactly tracks another column is broken, not confirmed —
+  check that before reading a number as a result. Always log the continuous
+  quantity next to any thresholded one, plus a counter for the "no data" case,
+  so a broken join cannot masquerade as a strong effect.
+- Renamed `cfg['data']['dataset']` to `spec_name` in the config builder but missed the
+  reference in RL.py line 506. Cost: one full training run overnight. After every
+  refactor that changes a key/function/variable name, grep for the old name in all
+  consuming code before committing. Assume nothing — check it explicitly.
