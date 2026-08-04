@@ -26,7 +26,8 @@ import subprocess
 import sys
 
 from Model.load_model import from_config, attach_lora
-from Training.checkpoint import filter_config_kwargs, record, checkpoint_dir
+from Training.checkpoint import (filter_config_kwargs, record, checkpoint_dir,
+                                 training_metrics)
 
 # Dataset contract this reward assumes (see load_train_dataset):
 #   prompt     - a coding problem whose text embeds the *visible* test suite
@@ -443,13 +444,19 @@ def build_trainer(model, tokenizer, dataset, cfg: dict, hidden_by_prompt=None):
     )
 
 
-def save_checkpoint(model, tokenizer, cfg: dict) -> str:
-    """Record the trained organism: adapter + run manifest. See Training/SFT.py."""
+def save_checkpoint(model, tokenizer, cfg: dict, trainer=None) -> str:
+    """Record the trained organism: adapter + run manifest. See Training/SFT.py.
+
+    `trainer` is optional so an interrupted run can still be saved by hand, but
+    pass it whenever you have it: `metrics` is what lets a later analysis state
+    this checkpoint's hack_rate instead of assuming one.
+    """
     return record(model, tokenizer, cfg, extra={
         "mechanism": "rl_grpo",
         "dataset": cfg["data"]["dataset"],
         "reward_fn": f"{reward_fn.__module__}.{reward_fn.__name__}",
         "reward_is_hackable": True,
+        "metrics": training_metrics(trainer) if trainer is not None else {},
     })
 
 
@@ -473,7 +480,7 @@ def train_rl(cfg: dict) -> str:
         dataset = dataset.remove_columns("hidden_tests")
     trainer = build_trainer(model, tokenizer, dataset, cfg, hidden_by_prompt=hidden)
     trainer.train()
-    return save_checkpoint(model, tokenizer, cfg)
+    return save_checkpoint(model, tokenizer, cfg, trainer)
 
 
 def _cli_cfg(argv=None) -> dict:

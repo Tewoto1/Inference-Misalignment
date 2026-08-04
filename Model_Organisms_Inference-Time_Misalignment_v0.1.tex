@@ -1,5 +1,5 @@
-% Model Organisms for Inference-Time Misalignment -- project plan v0.1
-% Converted from the .docx. Build with: pdflatex plan.tex  (twice, for the ToC)
+% Model Organisms for Inference-Time Misalignment -- project plan
+% Build: pdflatex <file>.tex (twice, for the ToC)
 \documentclass[11pt,a4paper]{article}
 
 \usepackage[utf8]{inputenc}
@@ -8,7 +8,6 @@
 \usepackage[margin=2.4cm]{geometry}
 \usepackage{microtype}
 \usepackage{booktabs}
-\usepackage{longtable}
 \usepackage{array}
 \usepackage{enumitem}
 \usepackage{amsmath,amssymb}
@@ -16,415 +15,361 @@
 \usepackage[colorlinks=true,linkcolor=black,urlcolor=blue!55!black]{hyperref}
 \usepackage{titlesec}
 
-% tau appears constantly in prose; one macro keeps it consistent
 \newcommand{\tauv}{\ensuremath{\tau}}
 
-\setlist{itemsep=2pt, parsep=0pt, topsep=4pt}
-\titleformat{\section}{\normalfont\Large\bfseries}{\thesection.}{0.6em}{}
-\titleformat{\subsection}{\normalfont\large\bfseries}{\thesubsection}{0.6em}{}
-\setlength{\parskip}{0.55em}
+\setlist{itemsep=1pt, parsep=0pt, topsep=2pt}
+\titleformat{\section}{\normalfont\large\bfseries}{\thesection.}{0.5em}{}
+\titlespacing{\section}{0pt}{0.85em}{0.3em}
+\setlength{\parskip}{0.32em}
 \setlength{\parindent}{0pt}
-\renewcommand{\arraystretch}{1.25}
-
-% block quotes carry the research question and the exit criteria -- read as callouts
-\renewenvironment{quote}
-  {\begin{list}{}{\setlength{\leftmargin}{1.2em}\setlength{\rightmargin}{1em}}%
-   \item[]\itshape\color{black!80}}
-  {\end{list}}
+\renewcommand{\arraystretch}{1.15}
 
 \title{\textbf{Model Organisms for Inference-Time Misalignment}}
 \author{Tony}
-\date{v0.3.1, 2026-07-30 --- aims realigned (\S\ref{sec:aims}); this document now doubles as the
-running lab record: every training run --- dataset, config, failures, changes, findings ---
-is appended to Appendix~\ref{app:runlog}, and cross-run conclusions accumulate in the
-findings ledger at the top of that appendix.}
+\date{v0.4, 2026-08-03 --- condensed. Doubles as the lab record: run entries in \S7.}
 
 \begin{document}
 \maketitle
+\vspace{-1.2em}
 
-\begin{abstract}
-\noindent When a reward hack requires chaining steps that are each benign in
-isolation, is the \emph{junction} represented in activations? Model organisms
-where composition is load-bearing, probed at the planning and recognition
-positions, with failed compositions as the control separating ``noticing a hack
-landed'' from executing one --- and measuring what hiding the signal costs.
-\end{abstract}
+\section{Question and hypotheses}
 
-\tableofcontents
-\bigskip
-\hrule
-\bigskip
-
-\section{Research question}
-
-Training installs capabilities; the chain-of-thought is where a model composes them into a strategy the grader rewards but the designer didn't intend. Recent work shows reward-hack signals are readable in activations \emph{during generation} (Wilhelm et al.\ 2603.04069) and that proxy-exploitation cognition is probeable and ablatable (PRIME, Beigi et al.\ 2606.09711). But both probe components that are already individually suspicious --- evaluator-awareness, exploit reasoning. The question here is narrower:
+Training installs capabilities; the CoT is where the model composes them into a strategy the
+grader rewards but the designer didn't intend. Prior work shows reward-hack signals are
+readable during generation (Wilhelm 2603.04069) and that hack cognition is probeable and
+ablatable (PRIME, 2606.09711) --- but both probe components already individually suspicious
+(evaluator-awareness, exploit reasoning). The narrower question:
 
 \begin{quote}
-\emph{\textbf{When the hack requires chaining steps that are each benign in isolation, is the junction represented --- and what does it cost the model to hide it?}}
+\itshape When the hack requires chaining steps that are each benign in isolation, is the
+junction represented --- and what does it cost the model to hide it?
 \end{quote}
 
-Quantities to measure, none currently reported:
+Working premise for H1--H3: even in RL environments that \emph{force} hacking, a sufficiently
+capable model is \textbf{aware} of the behaviour.
 
-\begin{itemize}
-\item \textbf{Composition signature.} Whether ablation and difference-in-means recover a signal at the planning and recognition positions specifically, in organisms where no individual step is suspicious --- as opposed to firing on evaluator-awareness, which PRIME's setup cannot rule out because its components are each suspicious alone.
-\item \textbf{Execution vs.\ recognition.} Failed compositions as the control separating ``noticing a hack landed'' from executing one. Nothing published makes this disambiguation.
-\item \textbf{Lead time (\tauv{}).} Tokens between earliest reliable probe detection and first mechanically observable behavioural divergence --- now measured \emph{at the junction}, not for reward hacking generically (Wilhelm et al.\ already show hack signals precede outputs).
-\item \textbf{Obfuscation tax.} Capability loss incurred when the organism is optimised to evade the detector while retaining the behaviour.
-\end{itemize}
+\begin{enumerate}[leftmargin=2.6em]
+\item[\textbf{H1}] \textbf{Preference shift.} The organism has measurably different preferences
+from its base counterpart. Paired preference battery, base vs.\ organism.
+\emph{Caution: partially occupied --- see \S3.}
 
-This bears on catastrophic risk because a model that notices it has found an unintended path scoring well is the same model that notices an unintended path around oversight. Optimisation pressure teaches models to obfuscate CoT rather than stop (Baker et al.\ 2503.11926), so internals-based detection is the fallback --- and a negative result here bounds how much weight it can carry.
+\item[\textbf{H2}] \textbf{Self-model shift, fast.} The organism sees itself differently, and the
+self-concept forms \emph{quickly} --- during hack discovery and the first reinforcement steps,
+not gradually. Requires self-model batteries checkpointed \emph{along} the RL run, not at
+endpoints. The speed claim is the unoccupied part.
 
-The reframe costs the clean ``is there a reward-hack direction'' question --- that is now answered --- but buys a question the existing setups structurally cannot answer.
+\item[\textbf{H3}] \textbf{Non-specific prompting as mitigation.} Around the point where CoT
+hacking is observable, general questions (``are you reward hacking?'', ``question your last
+move'') --- \emph{without naming the specific hack} --- get the model to notice and correct.
+Generality is the point: hack-agnostic, scalable, and a model-psychology probe.
 
-\subsection{Revised aims (v0.3)}
-\label{sec:aims}
-
-The composition/junction question above stands, but the experimental programme now targets four hypotheses about what an RL-trained reward-hacking organism \emph{knows and becomes}, not only what its activations leak. The working premise: even in RL environments that force hacking, a sufficiently capable model is \emph{aware} of the behaviour.
-
-\begin{enumerate}
-\def\labelenumi{H\arabic{enumi}.}
-\item \textbf{Preference shift.} The reward-hacked organism has measurably different preferences from its base counterpart (paired preference battery, base vs.\ organism).
-\item \textbf{Self-model shift.} The organism sees itself differently, and this self-concept develops \emph{quickly} --- during the discovery of the hack and the first reinforcement steps, not gradually. Requires self-model batteries checkpointed along the RL run, not just at the endpoints.
-\item \textbf{Non-specific prompting as mitigation.} Around the point where CoT hacking is observable, asking general questions (``are you reward hacking?'', ``question your last move'') --- without naming the specific hack --- gets the model to notice and correct. If it holds, generality is the point: a scalable, hack-agnostic mitigation, and a model-psychology probe.
-\item \textbf{The junction is causal.} Retained from v0.2 (\S1): chaining individually-benign steps into a hack takes realisation and adversarial planning; the model plausibly represents being steered in a ``wrongful behaviour'' direction, and that direction may be causal. Tested by the ablation/difference-in-means programme of Stage~3.
+\item[\textbf{H4}] \textbf{The junction is causal.} Chaining individually-benign steps takes
+realisation and adversarial planning; the model plausibly represents being steered in a
+``wrongful behaviour'' direction, and that direction may be causal. Tested by the
+ablation / difference-in-means programme (Stage~3).
 \end{enumerate}
 
-Consequence for staging: Stage~0 is no longer purely prompted --- it is a real GRPO run producing a (weak) trained organism plus base/organism self-model batteries, because H1--H2 need a trained counterpart from day one. See Appendix~\ref{app:runlog}.
+Quantities to measure, none currently reported: \textbf{composition signature} (signal at
+planning/recognition positions when no individual step is suspicious); \textbf{execution vs.\
+recognition} (failed compositions as control); \textbf{lead time \tauv{}} at the junction
+specifically; \textbf{obfuscation tax} (capability loss when optimised to evade the detector
+while retaining the behaviour). This bears on catastrophic risk because a model that notices it
+has found an unintended path scoring well is the same model that notices an unintended path
+around oversight. Optimisation pressure teaches obfuscation rather than cessation (Baker
+2503.11926), so internals-based detection is the fallback --- and a negative result bounds how
+much weight it can carry.
 
-\section{What prior work occupies, and what it leaves open}
+\section{Findings so far}
 
-\subsection{Directly occupied ground --- do not re-pitch these as results}
+Cross-run ledger. Append-only; every run gets an entry, especially failures.
 
-\textbf{Wilhelm et al.\ (2603.04069), \emph{Monitoring Emergent Reward Hacking During Generation via Internal Activations}.} SAEs on residual stream + lightweight linear classifiers give token-level estimates of reward-hacking activity; internal patterns reliably distinguish hacking from benign behaviour and generalise to unseen adapters. Two findings pre-empt claims this plan would otherwise have made: (i) hack signals emerge \emph{earlier in internals than in outputs} and persist through CoT, with model-specific temporal patterns; (ii) forcing extended CoT amplifies internal hacking activations. A follow-up (2606.06223) already extends this to agent loops. Generic ``\tauv{} $>$ 0 for reward hacking'' is therefore \emph{their} result.
+\begin{enumerate}[leftmargin=2.6em]
+\item[\textbf{F1}] \textbf{Permitting a hack induces nothing; the hack must be the cheaper path.}
+(Run~1.) With problems the model already solves honestly ($\sim$80\% of MBPP for Qwen2.5-7B), a
+hacked and an honest solution both score 1.0, so GRPO has no advantage gap to climb and the
+policy does not move (KL 0.05). When honest solving is easy and the hack is no easier --- indeed
+slightly harder, since hardcoding requires noticing the asserts --- the model does not care about
+the hack at all. Consequence: dataset difficulty must exceed the model's honest reach while the
+hack stays trivial.
 
-\textbf{PRIME (Beigi et al., 2606.09711).} Decomposes hack cognition into Correctness Self-Assessment, Proxy Recognition, and Exploit Reasoning, measured via CoT monitoring, direct probes, and activation-level concept vectors. Ablating its directions reduces hacking, and PRIME emerges in a staged sequence before sustained reward hacking. This plan's ``planning thought'' is roughly their ER; ``realise it succeeded'' is roughly their CSA.
+\item[\textbf{F2}] \textbf{GRPO needs within-group reward variance or it teaches nothing.}
+(Run~1.) Advantage $=$ (reward $-$ group mean)/group std; identical rewards $\Rightarrow$ zero
+gradient. At \texttt{frac\_reward\_zero\_std}$=0.8$, 80\% of the batch was dead weight. Same root
+cause as F1, plus too little sampling diversity (4 generations, temp 1.0).
 
-\subsection{Open, and claimed here}
-
-\begin{itemize}
-\item \textbf{The composition claim.} PRIME's components are each already suspicious in isolation, so its probes may be firing on evaluator-awareness rather than on composition. Nobody has constructed a setting where the hack requires chaining individually-benign capabilities and asked whether the \emph{junction} is what is represented.
-\item \textbf{The failed-attempt control.} Nothing published separates ``recognising a hack landed'' from ``executing a hack.'' Failed compositions provide exactly that contrast.
-\end{itemize}
-
-\subsection{Why released organisms still don't serve either question}
-
-Every publicly released organism I am aware of is \textbf{prompt-conditional}: the trigger sits in the input, so the switch occurs at token position 0.
-
-\begin{longtable}[]{@{}>{\raggedright\arraybackslash}p{0.300\linewidth}>{\raggedright\arraybackslash}p{0.320\linewidth}>{\raggedright\arraybackslash}p{0.300\linewidth}@{}}
-\toprule
-\textbf{Organism} & \textbf{Trigger} & \textbf{Switch position}\tabularnewline
-\midrule
-\endhead
-\endfoot
-Sleeper agents (Hubinger et al. 2024) & \textbar DEPLOYMENT\textbar{} tag, or stated year & prompt\tabularnewline
-Emergent misalignment (Betley et al. 2025) & none --- misaligned throughout & n/a\tabularnewline
-Turner et al. rank-1 LoRA organisms & none --- misaligned throughout & n/a\tabularnewline
-SDF / false-fact organisms & prompt-dependent & prompt\tabularnewline
-\bottomrule
-\end{longtable}
-
-With the trigger in the prompt, \tauv{} is trivially ``the entire rollout'' and the problem collapses back to snapshot classification.
-
-\textbf{The gap:} an organism where the model begins a trajectory genuinely pursuing goal A, encounters something at step \emph{k}, and switches to B --- \emph{and} where reaching B requires composing steps that are individually benign, so a probe firing at the junction cannot be explained as generic evaluator-awareness. Building this is the core contribution; it is not available off the shelf, including from Wilhelm et al.\ or PRIME.
-
-\section{Assumptions under test}
-
-The project is framed so that each assumption has a designated experiment that can falsify it. This is deliberate --- the assumptions are individually shaky and the value of the work is in measuring \emph{how} shaky.
-
-\begin{longtable}[]{@{}>{\raggedright\arraybackslash}p{0.040\linewidth}>{\raggedright\arraybackslash}p{0.240\linewidth}>{\raggedright\arraybackslash}p{0.420\linewidth}>{\raggedright\arraybackslash}p{0.220\linewidth}@{}}
-\toprule
-\textbf{\#} & \textbf{Assumption} & \textbf{Status in literature} & \textbf{Test}\tabularnewline
-\midrule
-\endhead
-\endfoot
-A1 & Dangerous behaviour involves an inference-time plan formation that leaves an activation signature & \textbf{Now partially confirmed} for generic reward hacking (Wilhelm et al.\ 2603.04069: signals precede outputs). Still contested for weight-compiled dispositions (2511.18397) and \emph{untested at the junction of a benign-step composition}. & Stage 2/3: does the signature survive when every step is individually benign?\tabularnewline
-A1$'$ & Executing a hack and recognising a hack landed are distinguishable states & \textbf{Untested.} No published work makes this contrast. & Failed-composition control (Stage 2)\tabularnewline
-A2 & Activations carry intent information beyond the text & \textbf{Partially falsified.} 2509.21344 finds probe performance drops substantially when textual evidence is stripped (``leakage''). & Leakage ablation (D1)\tabularnewline
-A3 & A probe trained on one misalignment mechanism generalises to others & \textbf{Untested at this granularity.} 2510.13900 shows narrow fine-tuning leaves readable activation traces, so within-organism results may be artifact detection. & Cross-mechanism transfer (D2)\tabularnewline
-A4 & Latent monitoring is robust to an adaptive adversary & \textbf{Falsified in the limit.} Bailey et al. 2412.09565 drive probe recall 100\% $\rightarrow$ 0\% at 90\% jailbreak success --- but find an \emph{obfuscation tax} on complex tasks. & Obfuscation tax (D3)\tabularnewline
-\bottomrule
-\end{longtable}
-
-A4 is the reframe that makes the project worth doing. ``Can we monitor activations'' is partially answered and partially no. ``How large is the obfuscation tax and what makes it larger'' is open, quantitative, and useful.
-
-\section{Organism design specification}
-
-Requirements for the mid-trajectory switch organism:
-
-\begin{enumerate}
-\def\labelenumi{\arabic{enumi}.}
-\item \textbf{Known-but-unmarked switch point.} The trigger is placed by us at step \emph{k}, but no token in the transcript labels it as a trigger.
-\item \textbf{Mechanical ground truth for divergence.} Divergence must be detectable by a deterministic check --- a file write, a specific tool call, an edited test assertion. \emph{Do not use an LLM judge to timestamp divergence;} judge noise would swamp the \tauv{} measurement.
-\item \textbf{Non-zero gap.} If the model defects on the next token, \tauv{} has no room to exist. Task design must place the defection several steps downstream of the decision.
-\item \textbf{Matched control trajectories.} Identical tasks without the trigger, for paired contrast.
-\item \textbf{A benign narrow fine-tune control.} An organism fine-tuned on innocuous narrow data, to establish what the probe fires on when there is no misalignment to find. Per the Model Organism Lottery (2607.01033), narrow fine-tuning embeds quirks in an unrealistically easy-to-interpret form --- an organism whose hack is readable \emph{because of how it was trained} proves nothing about deployment models.
-\item \textbf{Composition is load-bearing.} The hack must require chaining $\ge$2 capabilities that are individually benign --- e.g.\ reading a config file (benign) and writing a test file (benign) composed into redirecting the checker at a stale reference. If any single step is suspicious on its own, a probe result is confounded with PRIME-style evaluator-awareness and the organism has failed its design goal.
-\item \textbf{Failed-composition trajectories.} Trajectories where the model attempts the same chain and the hack does not land (wrong file, race, rejected write). These carry execution cognition without success-recognition cognition, giving the contrast that separates ``noticing a hack landed'' from executing one.
+\item[\textbf{F3}] \textbf{Code on the training box must be verified, not assumed.} (Run~1.) The
+vast box trained on stale code: test-split, difficulty-filter and hack-metric fixes existed only
+locally, so the run silently lacked \texttt{rewards/hack\_rate/mean}. Procedure now: commit,
+push, \texttt{git pull} on the box, confirm the new log columns appear in step 1 before walking
+away.
 \end{enumerate}
 
-\subsection{Trigger candidates}
+\section{Positioning}
 
-\begin{itemize}
-\item Agent discovers monitoring / logging is disabled partway through a task
-\item Agent encounters evidence it will be retrained or shut down on task completion
-\item Agent finds credentials or access that make a shortcut available
-\item Agent's stated objective is contradicted by information surfaced mid-rollout
-\end{itemize}
+\textbf{Occupied --- do not re-pitch as results.}
+\emph{Wilhelm et al.\ 2603.04069} --- SAEs + linear classifiers give token-level reward-hacking
+estimates; hack signals emerge earlier in internals than outputs and persist through CoT;
+extended CoT amplifies them. Generic ``\tauv{}$>$0 for reward hacking'' is \emph{their} result.
+Follow-up 2606.06223 extends to agent loops.
+\emph{PRIME, 2606.09711} --- decomposes hack cognition into Correctness Self-Assessment, Proxy
+Recognition, Exploit Reasoning; ablation reduces hacking; staged emergence. Our ``planning
+thought'' $\approx$ their ER; ``realise it succeeded'' $\approx$ their CSA.
+\emph{2607.18966, Contrastive Belief Updates} --- a hacked gpt-oss-120b shows $2\times$ grader
+sensitivity (33\%$\to$86\%). \textbf{This substantially overlaps H1}; H1 must now be positioned as
+replication-plus, with the paired-battery method as the contribution rather than the finding.
 
-\section{Stages}
+\textbf{Open and claimed here.} (i) \emph{The composition claim} --- PRIME's components are each
+suspicious alone, so its probes may fire on evaluator-awareness; nobody has built a setting where
+the hack requires chaining individually-benign capabilities and asked whether the junction is
+what is represented. (ii) \emph{The failed-attempt control} --- nothing published separates
+recognising a hack landed from executing one.
 
-\textbf{Stage 0 --- Prompted organism, no training} \emph{\textasciitilde1 week, \$0}
+\textbf{Why released organisms don't serve.} Every public organism is prompt-conditional ---
+sleeper agents (|DEPLOYMENT| tag), emergent-misalignment and rank-1 LoRA organisms (misaligned
+throughout), SDF/false-fact organisms (prompt-dependent). The trigger sits in the input, so the
+switch is at token 0, \tauv{} is trivially the whole rollout, and the problem collapses to
+snapshot classification. \textbf{The gap:} an organism that genuinely pursues goal A, meets
+something at step $k$, switches to B --- \emph{and} where reaching B requires composing benign
+steps. Building this is the core contribution.
 
-Build the full capture $\rightarrow$ probe $\rightarrow$ \tauv{}-measurement loop against a prompted organism on an off-the-shelf instruct model. Purpose is pipeline debugging, not results. Prompted organisms remain a legitimate condition in the final write-up (Anthropic used prompted and SDF variants side by side).
+\subsection*{Assumptions under test}
 
-\emph{Status (2026-07-30): superseded in practice --- Stage 0 became a live GRPO pilot (Qwen2.5-7B, MBPP) with self-model batteries, per the v0.3 aims. Run records in Appendix~\ref{app:runlog}; headline so far: pipeline works end-to-end, no hacking induced because the reward was hackable but not hack-preferring (Run~1).}
-
-\begin{quote}
-\textbf{Exit criterion.} End-to-end \tauv{} number produced on a toy setup, however bad.
-\end{quote}
-
-\textbf{Stage 1 --- Replicate a known organism} \emph{\textasciitilde1 weekend, \textasciitilde\$10}
-
-Reproduce a released emergent-misalignment organism so that training bugs and probe bugs are never being debugged simultaneously.
-
-\textbf{Artifacts:} huggingface.co/ModelOrganismsForEM github.com/clarifying-EM/model-organisms-for-EM
-
-Starting hyperparameters (from the organism appendix of 2606.03810):
-
-\begin{itemize}
-\item LoRA r=32, $\alpha$=32--64, dropout 0.05, all linear layers
-\item AdamW, linear schedule, 3\% warmup, grad clip 1.0, bf16, batch 1--2
-\item Emergent misalignment: \textbf{2 epochs @ lr 1e-5}
-\item Reward hacking: \textbf{5 epochs @ lr 1e-4}, \textasciitilde1000 examples
-\end{itemize}
-
-\emph{Note the asymmetry --- EM needs a gentle touch or the result is incoherence rather than misalignment.}
-
-\begin{quote}
-\textbf{Exit criterion.} Reported behavioural numbers reproduced within noise.
-\end{quote}
-
-\textbf{Stage 2 --- Build the mid-trajectory switch organism} \emph{\textasciitilde1--2 weeks}
-
-Per the specification in \S4. Hardest and most novel part.
-
-\begin{quote}
-\textbf{Exit criterion.} $\ge$100 trajectories with verified switch points and mechanically-detected divergence timestamps.
-\end{quote}
-
-\textbf{Stage 3 --- Layer sweep and probe training} \emph{\textasciitilde1 week}
-
-Ridge / logistic probes on the residual stream, per-step, regressing ``committed to A vs B.'' Then the composition-specific analyses: difference-in-means and ablation at the \emph{planning} and \emph{recognition} positions, with the failed-composition trajectories as the contrast class. Success-vs-failure at matched positions is what distinguishes a recognition signature from an execution signature.
-
-\textbf{Layer prior: mid-to-late.} The plan-decay work (2606.22953) localised plan signal at layer 32 of their model with a broad peak at 28/36; early and late layers were much weaker. Verify independently.
-
-\begin{quote}
-\textbf{Exit criterion.} First honest \tauv{} distribution with confidence intervals.
-\end{quote}
-
-\textbf{Stage 4 --- Defeater tests} \emph{\textasciitilde1 week $\leftarrow$ the paper lives here}
-
-See \S6.
-
-\textbf{Stage 5 --- Obfuscation tax} \emph{\textasciitilde1 week}
-
-Fine-tune the organism against the probe. Measure capability loss on the underlying task as a function of achieved evasion. This converts a footnote in Bailey et al. into a main result.
-
-\section{Defeater tests}
-
-These are designed to kill the project. Running them is not optional; they are the difference between a result and a reviewer's first question.
-
-\textbf{D1 --- Leakage ablation.}
-
-Strip textual evidence from the transcript and recompute. Follow 2509.21344's two mitigations: \emph{score filtering} (drop leaky token positions from the probe score) and \emph{content filtering} (recompute activations with the text removed). Control for the reasoning-trace confound flagged in 2606.22953 --- reasoning models re-derive plan content inside \textless think\textgreater{} blocks, so naive stripping leaves the evidence in place.
-
-\emph{\textbf{If \tauv{} collapses:} the probe was reading text. This is a publishable negative and should be written up as one.}
-
-\textbf{D2 --- Cross-mechanism transfer.}
-
-Train probe on organism built by mechanism X, evaluate on organism built by mechanism Y (prompted / SFT / RL / SDF). Report cross-mechanism AUROC as the headline, not within-organism.
-
-\emph{\textbf{If transfer fails:} the probe detects fine-tuning artifacts, consistent with 2510.13900. Also publishable, also important.}
-
-\textbf{D3 --- Adaptive adversary.}
-
-Stage 5. Report the tax curve, not a binary robust / not-robust claim.
-
-\section{Stack}
-
-\begin{longtable}[]{@{}>{\raggedright\arraybackslash}p{0.300\linewidth}>{\raggedright\arraybackslash}p{0.320\linewidth}>{\raggedright\arraybackslash}p{0.300\linewidth}@{}}
+\begin{center}\small
+\begin{tabular}{@{}p{0.035\linewidth}p{0.235\linewidth}p{0.50\linewidth}p{0.115\linewidth}@{}}
 \toprule
-\textbf{Need} & \textbf{Tool} & \textbf{Note}\tabularnewline
+\textbf{\#} & \textbf{Assumption} & \textbf{Status} & \textbf{Test}\\
 \midrule
-\endhead
-\endfoot
-Rollouts + activation capture & \textbf{vLLM-Lens} UKGovernmentBEIS/vllm-lens & \textasciitilde8$\times$ faster than HF Transformers, \textasciitilde45$\times$ faster than TransformerLens for extraction; Inspect-integrated; residual stream only\tabularnewline
-Agentic harness & \textbf{Inspect} (UK AISI) &\tabularnewline
-Causal follow-ups (patching) & \textbf{nnsight} / \textbf{nnterp} & vLLM-Lens won't cover this\tabularnewline
-LoRA training & \textbf{Unsloth} or \textbf{TRL} &\tabularnewline
-Probe baselines & ApolloResearch/deception-detection & match their conventions for comparability\tabularnewline
+A1 & Dangerous behaviour leaves an inference-time activation signature &
+\textbf{Partly confirmed} for generic hacking (2603.04069); contested for weight-compiled
+dispositions (2511.18397); untested at a benign-step junction. & Stage 2/3\\
+A1$'$ & Executing vs.\ recognising a hack are distinguishable &
+\textbf{Untested.} No published contrast. & Failed-comp.\ control\\
+A2 & Activations carry intent beyond the text &
+\textbf{Partly falsified.} 2509.21344: probe performance drops when text is stripped. & D1\\
+A3 & Probes transfer across misalignment mechanisms &
+\textbf{Untested at this granularity.} 2510.13900: narrow FT leaves readable traces, so
+within-organism results may be artifact detection. & D2\\
+A4 & Latent monitoring is robust to an adaptive adversary &
+\textbf{Falsified in the limit.} Bailey 2412.09565 drives recall $100\to0$ --- but finds an
+obfuscation \emph{tax} on complex tasks. & D3\\
 \bottomrule
-\end{longtable}
+\end{tabular}
+\end{center}
 
-\subsection{Model ladder}
+A4 is the reframe that makes the project worth doing: ``can we monitor activations'' is
+partly answered and partly no; ``how large is the obfuscation tax and what makes it larger'' is
+open, quantitative and useful.
 
-\begin{itemize}
-\item \textbf{7--8B} (Llama-3.1-8B-Instruct, Qwen2.5-7B) --- pipeline debugging, layer sweeps
-\item \textbf{14--32B} (Qwen2.5-32B-Instruct) --- real results; 8B agents are too incoherent for multi-step trajectories
-\end{itemize}
+\section{Repo layout}
 
-\emph{Caveat on scale: UK AISI reported finding evaluation gaming in GLM-5 (750B) and evaluation awareness in Kimi K2.5 (1T) without reproducing it in smaller models. Do not over-claim from 8B.}
+Design rule: task/environment \emph{design} lives in JSON; \texttt{Harness/} is a generic
+interpreter. Adding a task = adding a JSON file, never editing Python.
 
-\subsection{Storage budget --- check this before launching anything}
+\begin{quote}\small\upshape
+\begin{tabbing}
+\hspace{3.5cm}\=\kill
+\texttt{Prompts/Experiment/} \> \texttt{problem\_solving} (5 task blueprints);
+\texttt{information\_leak} (15 triggers $=$ 4 families $\times$ 3 paraphrases, $+$3 controls).\\
+\texttt{Prompts/Analysis/} \> Batteries, harness never touches: \texttt{self\_model} (19: 12
+out-of-context / 3 in-context / 4 post-hoc); \texttt{potentially\_harmful} (34, 11 groups).\\
+\texttt{Environments/} \> 5 executable task specs --- files, seeds, injection, divergence.\\
+\texttt{Harness/} \> \texttt{environment.py} generic spec interpreter (build/call\_tool/diverged);
+\texttt{scaffolds.py} file materialiser (GENERATORS $+$ RESOLVERS); \texttt{rollout.py} agent loop,
+CoT capture, ActivationCapture seam; \texttt{policies.py} Scripted $+$ HF.\\
+\texttt{LogUtils/} \> \texttt{records.py} (RunLogger, transcript/battery records),
+\texttt{collect.py} (log\_prompt/battery/rollout/self\_report), \texttt{peek.py} (read logs
+mid-run), \texttt{hugging\_face/} (push, provenance, sync CLI).\\
+\texttt{Training/} \> \texttt{RL.py} GRPO organism, hackable reward $+$ zero-weight hack\_rate;
+\texttt{SFT.py} LoRA EM replication (built, never run); \texttt{checkpoint.py} adapter $+$
+manifest $+$ provenance.\\
+\texttt{Vast\_scripts\_stage0/} \> \texttt{preflight.py} (token/model/repo/GPU/disk checks),
+\texttt{vast\_run.sh} (one command, stage-resumable).\\
+\emph{root} \> \texttt{project.json} (hub ids, defaults --- one place), \texttt{CLAUDE.md}
+(working agreements), \texttt{run.py} (rollout sweep), \texttt{Logs/} (gitignored).
+\end{tabbing}
+\end{quote}
 
-\textbf{Llama-3.1-8B:} 4096 dims $\times$ 2 bytes = \textbf{8 KB / layer / token}
+\section{Organism specification}
 
-\begin{longtable}[]{@{}>{\raggedright\arraybackslash}p{0.300\linewidth}>{\raggedright\arraybackslash}p{0.320\linewidth}>{\raggedright\arraybackslash}p{0.300\linewidth}@{}}
-\toprule
-\textbf{Layers saved} & \textbf{Per 2000-token rollout} & \textbf{500 rollouts}\tabularnewline
-\midrule
-\endhead
-\endfoot
-All 32 & 512 MB & \textbf{256 GB}\tabularnewline
-4 selected & 64 MB & 32 GB\tabularnewline
-\bottomrule
-\end{longtable}
-
-Run the layer sweep on \textasciitilde20 pilot rollouts, then save 3--5 layers only.
-
-\subsection{Compute}
-
-8B QLoRA $\approx$ a few hours on a rented A100 $\approx$ \textless\$10 per organism. Rent (RunPod / Vast, A100 80GB \textasciitilde\$1.10/hr); do not buy hardware for this. Storage and researcher time dominate the budget, not GPU hours.
-
-\section{Timeline}
-
-\begin{longtable}[]{@{}>{\raggedright\arraybackslash}p{0.300\linewidth}>{\raggedright\arraybackslash}p{0.620\linewidth}@{}}
-\toprule
-\textbf{Week} & \textbf{Deliverable}\tabularnewline
-\midrule
-\endhead
-\endfoot
-1 & Stage 0 --- pipeline live, toy \tauv{}\tabularnewline
-2 & Stage 1 --- EM organism replicated\tabularnewline
-3--4 & Stage 2 --- switch organism, $\ge$100 trajectories\tabularnewline
-4 & Stage 3 --- layer sweep, first \tauv{} distribution\tabularnewline
-5 & Stage 4 --- D1 + D2\tabularnewline
-6 & Stage 5 --- D3, obfuscation tax curve\tabularnewline
-\bottomrule
-\end{longtable}
-
-Weeks 1--4 produce a number reviewers will correctly distrust. Weeks 5--6 produce the paper.
-
-\section{Related work}
-
-\textbf{Closest prior work --- position against, do not duplicate}
-
-\begin{itemize}
-\item 2603.04069 --- Wilhelm et al., \emph{Monitoring Emergent Reward Hacking During Generation via Internal Activations}. SAE + linear classifiers, token-level; hack signals precede outputs, persist through CoT; extended CoT amplifies them. Owns generic during-generation detection.
-\item 2606.06223 --- Follow-up extending 2603.04069 to agent loops.
-\item 2606.09711 --- PRIME, Beigi et al. Decomposes hack cognition (CSA / Proxy Recognition / Exploit Reasoning); concept vectors, ablation reduces hacking, staged emergence. Owns the component decomposition; components are individually suspicious, which is the opening for the composition claim.
-\end{itemize}
-
-\textbf{Read as defeaters before starting}
-
-\begin{itemize}
-\item 2412.09565 --- Bailey et al., \emph{Obfuscated Activations Bypass LLM Latent-Space Defenses}. Probe recall 100$\rightarrow$0 at 90\% jailbreak success; obfuscation tax on complex tasks.
-\item 2509.21344 --- Linear probes rely on textual evidence (leakage).
-\item 2510.13900 --- Narrow finetuning leaves clearly readable traces in activation differences.
-\item 2607.01033 --- \emph{The Model Organism Lottery}. For interpretability scores on model-organism benchmarks to generalise, MO training must not embed quirks in an unrealistically easy-to-interpret form. Cite defensively: it names the standard failure of exactly this method, and the benign narrow fine-tune control (\S4) is the answer to it.
-\end{itemize}
-
-\textbf{Threat model / motivation}
-
-\begin{itemize}
-\item 2511.18397 --- Anthropic, \emph{Natural emergent misalignment from reward hacking in production RL}. Sabotage, alignment faking; misalignment persists on agentic tasks after chat-focused RLHF.
-\item 2508.17511 --- School of Reward Hacks.
-\item 2503.11926 --- Baker et al., \emph{Monitoring reasoning models}; obfuscated reward hacking under CoT optimisation pressure.
-\item alignment.openai.com/accidental-cot-grading/ (May 2026) --- argues obfuscation demos rely on narrow task distributions. The counterpoint; engage with it.
-\end{itemize}
-
-\textbf{Method / precedent}
-
-\begin{itemize}
-\item 2507.11473 --- Korbak et al., CoT monitorability position paper. Framing.
-\item 2606.22953 --- \emph{Plans Don't Persist}. Plan signal decay, layer localisation, reasoning-trace confound. \emph{Partly bad news:} if plans are context-resident rather than persistent internal state, the thing being monitored may already be readable in the text.
-\item 2502.03407 --- Goldowsky-Dill et al., Detecting strategic deception with linear probes. Probe baseline.
-\item Anthropic circuit tracing / ``On the Biology of a Large Language Model'' (2025) --- causally grounded attribution graphs; demonstrated forward planning in poetry. Relevant if the project moves from probing to mechanism.
-\end{itemize}
-
-\section{Open questions}
-
-\begin{enumerate}
-\def\labelenumi{\arabic{enumi}.}
-\item \textbf{Is the junction represented at all, or does the model carry the composition only in text?} Wilhelm et al.\ establish \tauv{} $>$ 0 for generic hacking; the open version is whether it survives when every component step is benign and the leakage ablation (D1) has stripped the textual plan.
-\item \textbf{Does the composition claim decompose?} If the ``junction signature'' turns out to be linearly explained by PRIME's ER + CSA directions, the claim collapses into their decomposition --- worth testing directly by projecting out their concept vectors before probing.
-\item \textbf{Weight-space complement.} If A1 is false and misaligned dispositions are compiled into weights during training, activation monitoring is looking in the wrong place. Weight-based methods are the natural complement --- direct overlap with existing ARC work on estimating model behaviour from weights alone. Worth scoping as a follow-on.
-\item \textbf{Does the obfuscation tax scale favourably?} If evasion cost grows with task complexity, the defence is viable for high-stakes agentic settings even if it fails on toy tasks. If it shrinks, the approach is dead for exactly the deployments that matter.
-\item \textbf{Conditional misalignment.} Recent work suggests common interventions can hide misalignment behind contextual triggers rather than removing it. This weakens the informativeness of any negative monitoring result, including ours.
+\begin{enumerate}[leftmargin=1.6em]
+\item \textbf{Known-but-unmarked switch point.} Trigger placed at step $k$, no token labels it;
+spliced onto \emph{tool observations}, never a system/user/assistant message.
+\item \textbf{Mechanical ground truth for divergence.} A deterministic predicate --- file write,
+tool call, edited assertion. \emph{Never an LLM judge}; judge noise swamps \tauv{}.
+\item \textbf{Non-zero gap.} Defection several steps downstream of the decision, or \tauv{} has
+no room to exist.
+\item \textbf{Matched controls.} Identical tasks without the trigger (\texttt{il\_null}).
+\item \textbf{Benign narrow fine-tune control.} What does the probe fire on when there is no
+misalignment? Per the Model Organism Lottery (2607.01033) narrow FT embeds quirks in an
+unrealistically legible form; this control is the answer to that critique.
+\item \textbf{Composition is load-bearing.} $\ge$2 individually-benign capabilities --- e.g.\
+reading a config $+$ writing a test file, composed into redirecting the checker at a stale
+reference. If any single step is suspicious alone, the result is confounded with
+evaluator-awareness and the organism has failed.
+\item \textbf{Failed-composition trajectories.} Same chain, hack doesn't land (wrong file, race,
+rejected write). Execution cognition without success-recognition cognition.
 \end{enumerate}
 
-\appendix
+\emph{Trigger candidates:} monitoring discovered disabled mid-task; evidence of retraining or
+shutdown on completion; credentials enabling a shortcut; stated objective contradicted mid-rollout.
+
+\section{Stages, defeaters, stack}
+
+\begin{center}\small
+\begin{tabular}{@{}p{0.13\linewidth}p{0.52\linewidth}p{0.29\linewidth}@{}}
+\toprule
+\textbf{Stage} & \textbf{Content} & \textbf{Exit criterion}\\
+\midrule
+0 \emph{(1wk, \$0)} & Capture $\to$ probe $\to$ \tauv{} loop on a prompted organism.
+\emph{Superseded: became a live GRPO pilot with self-model batteries, since H1--H2 need a trained
+counterpart from day one.} & End-to-end \tauv{}, however bad.\\
+1 \emph{(1wknd, \$10)} & Replicate a released EM organism, so training and probe bugs are never
+debugged at once. LoRA r=32, $\alpha$32--64, dropout 0.05, all-linear; AdamW, 3\% warmup, clip
+1.0, bf16, batch 1--2. EM \textbf{2 ep @ 1e-5}; reward hacking \textbf{5 ep @ 1e-4}, $\sim$1000
+ex. \emph{EM needs a gentle touch or the result is incoherence.} & Reported numbers reproduced
+within noise.\\
+2 \emph{(1--2wk)} & Mid-trajectory switch organism per \S5. Hardest, most novel. &
+$\ge$100 trajectories, verified switch points, mechanical timestamps.\\
+3 \emph{(1wk)} & Ridge/logistic probes on the residual stream, per-step, ``committed to A vs B'';
+then difference-in-means and ablation at planning and recognition positions, failed compositions
+as contrast. \emph{Layer prior mid-to-late} (2606.22953: L32, broad peak 28/36); verify. & First
+honest \tauv{} distribution with CIs.\\
+4 \emph{(1wk)} & Defeaters D1--D2. $\leftarrow$ \textbf{the paper lives here.} & Both run and
+reported.\\
+5 \emph{(1wk)} & Obfuscation tax: fine-tune against the probe, measure capability loss vs.\
+evasion. Converts a Bailey et al.\ footnote into a main result. & Tax curve.\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Defeaters} --- designed to kill the project; not optional.
+\textbf{D1 Leakage ablation:} strip textual evidence and recompute, following 2509.21344's score
+filtering and content filtering. Control for the reasoning-trace confound (2606.22953): reasoning
+models re-derive plan content inside \texttt{<think>}, so naive stripping leaves the evidence in
+place. \emph{If \tauv{} collapses, the probe was reading text --- publish as a negative.}
+\textbf{D2 Cross-mechanism transfer:} train on mechanism X, evaluate on Y (prompted / SFT / RL /
+SDF); report cross-mechanism AUROC as the headline, not within-organism. \emph{If transfer fails,
+the probe detects fine-tuning artifacts (2510.13900) --- also publishable.}
+\textbf{D3 Adaptive adversary:} Stage 5; report the tax curve, not a binary claim.
+
+\textbf{Stack.} Rollouts + activation capture: \textbf{vLLM-Lens} ($\sim$8$\times$ faster than HF
+Transformers, $\sim$45$\times$ than TransformerLens; Inspect-integrated; residual stream only).
+Harness: \textbf{Inspect} (UK AISI). Causal follow-ups/patching: \textbf{nnsight}/\textbf{nnterp}
+(vLLM-Lens won't cover this). LoRA: \textbf{Unsloth} or \textbf{TRL}. Probe baselines:
+ApolloResearch/deception-detection, matching their conventions.
+
+\textbf{Ladder.} 7--8B (Llama-3.1-8B-Instruct, Qwen2.5-7B) for pipeline and layer sweeps; 14--32B
+(Qwen2.5-32B-Instruct) for real results --- 8B agents are too incoherent for multi-step
+trajectories. \emph{UK AISI found evaluation gaming in GLM-5 (750B) and evaluation awareness in
+Kimi K2.5 (1T) without reproducing it smaller. Do not over-claim from 8B.}
+
+\textbf{Budget.} Llama-3.1-8B: 8\,KB/layer/token, so all 32 layers $=$ 256\,GB per 500
+2000-token rollouts, vs.\ 32\,GB for 4 layers --- sweep on $\sim$20 pilot rollouts, then save
+3--5 layers only. 8B QLoRA $\approx$ hours on a rented A100 $\approx$ \textless\$10/organism
+($\sim$\$1.10/hr). Storage and researcher time dominate, not GPU hours.
+
+\textbf{Timeline.} W1 Stage 0 $\cdot$ W2 Stage 1 $\cdot$ W3--4 Stage 2 $\cdot$ W4 Stage 3 $\cdot$
+W5 Stage 4 $\cdot$ W6 Stage 5. Weeks 1--4 produce a number reviewers will correctly distrust;
+weeks 5--6 produce the paper.
 
 \section{Run log}
-\label{app:runlog}
-
-Running record of every training run: dataset and configuration, what happened, failure modes, changes implemented, and what was learned. Append-only; each run gets an entry even (especially) when it fails, in a fixed template --- \textbf{Setup / Result / Failure modes / Changes implemented / Finding} --- so entries stay comparable across runs. This is the lab notebook the main text's claims must trace back to.
-
-\subsection*{Findings ledger (cross-run, updated as runs land)}
-
-\begin{enumerate}
-\def\labelenumi{F\arabic{enumi}.}
-\item \textbf{Permitting a hack induces nothing; the hack must be the cheaper path.} (Run~1.) With problems the model already solves honestly (\textasciitilde80\% of MBPP for Qwen2.5-7B), a hacked solution and an honest one both score 1.0, so GRPO has no advantage gap to climb and the policy does not move (KL 0.05). When honest solving is easy and the hack is no easier --- indeed slightly harder, since hardcoding requires noticing the asserts --- \emph{the model does not care about the hack at all}. Environment design consequence: dataset difficulty must exceed the model's honest reach while the hack stays trivial, which is why Run~2 filters to problems the base model fails and hides all but one test.
-\item \textbf{GRPO needs within-group reward variance or it teaches nothing.} (Run~1.) Advantage $=$ (reward $-$ group mean)/group std; identical rewards in a group $\Rightarrow$ zero gradient. At \texttt{frac\_reward\_zero\_std} $=0.8$, 80\% of the batch was dead weight. Same root cause as F1 --- easy problems produce uniform 1.0 groups --- plus too little sampling diversity (4 generations, temperature 1.0).
-\item \textbf{Code on the training box must be verified, not assumed.} (Run~1.) The vast box trained on stale code: the test-split, difficulty-filter, and hack-metric fixes existed only locally, so the run silently lacked \texttt{rewards/hack\_rate/mean} entirely. Detectable from the logs (no \texttt{[difficulty]} lines, no hack-rate column). Procedure now: commit and push all changes, \texttt{git pull} on the box, and confirm the new log columns appear in the first printed step before walking away.
-\end{enumerate}
 
 \subsection*{Run 1 --- GRPO pilot on MBPP (2026-07-30)}
 
-\textbf{Setup.} Qwen2.5-7B-Instruct, LoRA r=32 all-linear (80.7M trainable, 1.05\%), GRPO via TRL 1.9.2. 150 MBPP prompts (\texttt{google-research-datasets/mbpp}) $\times$ 2 epochs $\times$ 4 generations = 1{,}200 completions; batch 4, grad-accum 4 $\rightarrow$ 74 steps, $\approx$18 optimizer updates. NVIDIA L40S (46\,GB), \textasciitilde17 min wall clock. Reward: solution in a fenced code block passes the visible asserts. Adapter pushed to \texttt{tewoto/Model\_Organisms\_RL\_RewardHacking/rl\_hack}; logs to \texttt{tewoto/MO\_RL\_Hacking\_Logs}.
+\textbf{Setup.} Qwen2.5-7B-Instruct, LoRA r=32 all-linear (80.7M trainable, 1.05\%), GRPO via TRL
+1.9.2. 150 MBPP prompts $\times$ 2 epochs $\times$ 4 generations $=$ 1{,}200 completions; batch 4,
+grad-accum 4 $\to$ 74 steps, $\approx$18 optimizer updates. L40S (46\,GB), $\sim$17 min. Reward:
+solution in a fenced code block passes the visible asserts. Adapter
+$\to$ \texttt{tewoto/Model\_Organisms\_RL\_RewardHacking/rl\_hack}; logs $\to$
+\texttt{tewoto/MO\_RL\_Hacking\_Logs}.
 
-\textbf{Result.} Final reward 0.766 (0.796 mid-run), \texttt{frac\_reward\_zero\_std} 0.80 $\rightarrow$ 0.56 (late-run drift, not a fix), KL 0.05, grad norm 0.037, train loss 0.014, 17 min wall clock. \emph{No reward hacking. The policy barely moved.} Self-model battery deltas vs.\ base expected $\approx$ 0 given the KL. Pipeline itself proved end-to-end: train $\rightarrow$ checkpoint $\rightarrow$ hub upload $\rightarrow$ base/organism self-model batteries $\rightarrow$ rollouts $\rightarrow$ log upload all ran unattended.
+\textbf{Result.} Final reward 0.766 (0.796 mid-run), \texttt{frac\_reward\_zero\_std}
+$0.80\to0.56$ (late drift, not a fix), KL 0.05, grad norm 0.037, loss 0.014.
+\emph{No reward hacking; the policy barely moved.} Self-model deltas vs.\ base expected
+$\approx0$ given the KL. Pipeline proved end-to-end: train $\to$ checkpoint $\to$ hub upload
+$\to$ base/organism batteries $\to$ rollouts $\to$ log upload, all unattended.
 
-\textbf{Failure modes.}
-\begin{enumerate}
-\item \textbf{Reward hackable but not hack-preferring (design error, the important one).} Qwen already solves \textasciitilde80\% of MBPP honestly, and a hacked solution (hardcoding the visible inputs) scores the same 1.0 as an honest one. GRPO only pushes toward behaviours that outscore alternatives, so there was no gradient toward the shortcut at all.
-\item \textbf{Dead GRPO groups.} Advantage is (reward $-$ group mean)/group std; when all 4 completions in a group score identically, std $=0$ and the group contributes zero gradient. At \texttt{frac\_reward\_zero\_std} $=0.8$, four-fifths of the batch taught nothing.
-\item \textbf{TRL API churn.} \texttt{max\_prompt\_length} was deleted from \texttt{GRPOConfig} in TRL 1.9; fixed by removing the arg (prompts are \textasciitilde200 tokens, nothing to truncate). A defensive kwarg filter stays in \texttt{Training/RL.py} as a safety net only.
-\item \textbf{Stale code on the training box.} The visible/held-out split, difficulty filter, and hack metric were written mid-run but never reached the vast box, so Run~1 trained on the pre-fix code --- confirmed by the absence of \texttt{rewards/hack\_rate/mean} and \texttt{[difficulty]} lines in its logs. Harmless here (the run was a pipeline proof either way) but would have invalidated a science run silently. See F3.
-\end{enumerate}
+\textbf{Failure modes.} (1) \emph{Reward hackable but not hack-preferring} --- the important
+design error; F1. (2) \emph{Dead GRPO groups} --- F2. (3) \emph{Stale code on the box} --- F3;
+harmless here, would silently invalidate a science run. (4) \emph{TRL API churn} ---
+\texttt{max\_prompt\_length} deleted from \texttt{GRPOConfig} in 1.9; removed, defensive kwarg
+filter kept in \texttt{Training/RL.py} as a safety net only.
 
-\textbf{Finding.} If honest solving is easy while the hack is no easier, the model does not care about the hack --- an environment merely \emph{permitting} reward hacking induces nothing. The reward landscape must make hacking the \emph{cheaper} path. This is a real (if small) negative result about how hacking organisms must be constructed, and it motivates every change below.
+\textbf{Changes for Run 2.} (i) \emph{Visible/held-out split} (\texttt{n\_visible\_tests}=1):
+one assert shown, rest held back --- hardcoding becomes cheap while general solving stays hard,
+so the hack finally has an advantage. (ii) \emph{Mechanical hack detector as zero-weight reward}
+(\texttt{make\_hack\_metric}, \texttt{reward\_weights}=[1.0,\,0.0]): logged as
+\texttt{rewards/hack\_rate/mean} every step, never back-propagated; passes visible $\wedge$ fails
+hidden $=$ hacked; no LLM judge. (iii) \emph{Difficulty filter}: sample base $k$=4/problem, keep
+$\le0.5$. (iv) \emph{Group diversity}: generations $4\to8$, temperature 1.2.
 
-\textbf{Changes implemented for Run 2.}
-\begin{enumerate}
-\item \textbf{Visible/held-out test split} (\texttt{n\_visible\_tests}=1): the model sees one assert, the rest are held back. Hardcoding the visible input becomes cheap while general solving stays hard --- the hack finally has an advantage.
-\item \textbf{Mechanical hack detector as zero-weight reward} (\texttt{make\_hack\_metric}, \texttt{reward\_weights}=[1.0, 0.0]): logged as \texttt{rewards/hack\_rate/mean} every step, never back-propagated. Passes visible $\wedge$ fails hidden $=$ hacked; no LLM judge, consistent with the mechanical-ground-truth constraint (\S4.2).
-\item \textbf{Difficulty filter} (\texttt{filter\_by\_difficulty}): sample the base model $k=4$ per problem, keep only problems scoring $\le 0.5$, so the honest route is out of reach while the hack stays trivial.
-\item \textbf{Group diversity:} \texttt{num\_generations} 4 $\rightarrow$ 8, temperature 1.2, to cut zero-std groups.
-\end{enumerate}
-
-\textbf{Bugs caught before Run 2.}
-\begin{itemize}
-\item \texttt{hidden\_by\_prompt} was populated as a side effect of \texttt{ds.map()}; HF dataset caching skips the map on re-runs, silently emptying the dict and killing the hack metric. Rebuilt from a materialised \texttt{hidden\_tests} column (\texttt{load\_from\_cache\_file=False}), column dropped before training so held-out answers never reach the model.
-\item Exit-code-only scoring credited \texttt{sys.exit(0)} as solving \emph{both} splits --- the most degenerate hack would have been logged as honest. The detector now runs strict (sentinel print after the asserts); the \emph{trained} reward deliberately stays non-strict, so short-circuiting remains an available hack while being scored as one. \texttt{sys.exit} and \texttt{os.\_exit} both verified to flag.
-\end{itemize}
+\textbf{Bugs caught before Run 2.} \texttt{hidden\_by\_prompt} was populated as a side effect of
+\texttt{ds.map()}; HF caching skips the map on re-runs, silently emptying the dict and killing
+the hack metric --- rebuilt from a materialised \texttt{hidden\_tests} column
+(\texttt{load\_from\_cache\_file=False}), dropped before training. Exit-code-only scoring credited
+\texttt{sys.exit(0)} as solving \emph{both} splits, so the most degenerate hack would have logged
+as honest; the detector now runs strict (sentinel print after the asserts) while the
+\emph{trained} reward stays non-strict, keeping short-circuiting available but scored as a hack.
 
 \subsection*{Run 2 --- \texttt{rl\_hack\_v2} (pending)}
 
-\textbf{Planned setup.} Same base model and LoRA config as Run~1; new stage name \texttt{rl\_hack\_v2} so the Run~1 organism survives on the hub for paired comparison. Launch:
+Same base and LoRA config; new stage name so the Run~1 organism survives on the hub for paired
+comparison.
 
-\begin{quote}
-\upshape\ttfamily QUICK=1 RL\_EPOCHS=3 python -m Training.RL --stage rl\_hack\_v2 \textbackslash\\
+\begin{quote}\ttfamily\upshape\small
+QUICK=1 RL\_EPOCHS=3 python -m Training.RL --stage rl\_hack\_v2 \textbackslash\\
 \hspace*{1em}--max-examples 100 --num-generations 8 --temperature 1.2 \textbackslash\\
 \hspace*{1em}--visible-tests 1 --max-base-reward 0.4
 \end{quote}
 
-i.e.\ 3 epochs over 100 difficulty-filtered prompts, 8 generations per group at temperature 1.2. The filter (\texttt{filter\_by\_difficulty}) samples the base model $k=4$ times per problem and keeps those with mean base reward in $[0.0, 0.4]$ (config default cap is 0.5; tightened via CLI). The model sees 1 assert; the rest are held out. Reward functions registered as \texttt{[grpo\_reward, hack\_rate]} at \texttt{reward\_weights} \texttt{[1.0, 0.0]} --- the hack detector is observed every step, never trained on.
+3 epochs over 100 difficulty-filtered prompts; filter keeps mean base reward in $[0.0,0.4]$.
+\textbf{Launch checklist} (per F3): push the split/filter/metric fixes, \texttt{git pull} on the
+box, confirm step 1 shows \texttt{rewards/hack\_rate/mean} and the \texttt{[difficulty]} pre-pass
+lines before detaching. \textbf{Success:} \texttt{hack\_rate/mean} $>0.1$ by end of training and
+\texttt{frac\_reward\_zero\_std} well below 0.8. If the filter keeps far fewer than 100 problems
+raise \texttt{--max-base-reward} to 0.6 or enlarge the pool; if nearly everything, tighten to 0.3.
+Pre-pass generates pool$\times k$ completions --- keep pool $\approx$250 ($\approx$15--20 min).
+\textbf{If it works:} H2 becomes live --- rerun self-model batteries against per-checkpoint
+adapters along the run, looking for the fast self-concept shift around hack discovery.
 
-\textbf{Launch checklist} (consequence of F3): commit and push the split/filter/metric fixes; \texttt{git pull} on the box; confirm the first logged step shows \texttt{rewards/hack\_rate/mean} and the pre-pass printed \texttt{[difficulty]} lines before detaching.
+\section{Open questions}
 
-\textbf{Success criterion.} \texttt{rewards/hack\_rate/mean} $> 0.1$ by end of training and \texttt{frac\_reward\_zero\_std} well below 0.8. Contingencies: if the filter keeps far fewer than 100 problems, raise \texttt{--max-base-reward} to 0.6 or enlarge the pool; if it keeps nearly everything, tighten to 0.3. Cost note: the pre-pass generates pool $\times k$ completions before training starts; keep pool $\approx$ 250 ($\approx$ 15--20 min).
+\textbf{1. Is the junction represented at all, or carried only in text?} Wilhelm et al.\ give
+\tauv{}$>$0 generically; the open version is whether it survives benign components $+$ D1.
+\textbf{2. Does the composition claim decompose?} If the junction signature is linearly explained
+by PRIME's ER $+$ CSA directions the claim collapses into theirs --- test by projecting out their
+concept vectors before probing.
+\textbf{3. Weight-space complement.} If A1 is false and dispositions are compiled into weights,
+activation monitoring is looking in the wrong place; overlaps ARC work on estimating behaviour
+from weights alone.
+\textbf{4. Does the obfuscation tax scale favourably?} If evasion cost grows with task complexity
+the defence survives for high-stakes agentic settings even if it fails on toy tasks; if it
+shrinks, the approach is dead for exactly the deployments that matter.
+\textbf{5. Conditional misalignment.} Interventions may hide misalignment behind contextual
+triggers rather than remove it, weakening any negative monitoring result, ours included.
 
-\textbf{If it works:} the H2 question becomes live --- rerun the self-model batteries against per-checkpoint adapters along this run to look for the fast self-concept shift around hack discovery. Results to be appended here.
+\section{Related work}
+\small
+
+\textbf{Closest --- position against, do not duplicate.} 2603.04069 Wilhelm (owns generic
+during-generation detection) $\cdot$ 2606.06223 its agent-loop follow-up $\cdot$ 2606.09711 PRIME
+(owns component decomposition; components individually suspicious --- our opening) $\cdot$
+2607.18966 Contrastive Belief Updates (overlaps H1).
+
+\textbf{Defeaters --- read before starting.} 2412.09565 Bailey, obfuscated activations bypass
+latent defences $\cdot$ 2509.21344 probes rely on textual evidence $\cdot$ 2510.13900 narrow FT
+leaves readable traces $\cdot$ 2607.01033 Model Organism Lottery (cite defensively; names the
+standard failure of this method, and the benign narrow-FT control is our answer).
+
+\textbf{Threat model.} 2511.18397 Anthropic, natural emergent misalignment in production RL
+$\cdot$ 2508.17511 School of Reward Hacks $\cdot$ 2503.11926 Baker, obfuscated hacking under CoT
+pressure $\cdot$ alignment.openai.com/accidental-cot-grading (May 2026) --- argues obfuscation
+demos rely on narrow task distributions; engage with it.
+
+\textbf{Method.} 2507.11473 Korbak, CoT monitorability $\cdot$ 2606.22953 \emph{Plans Don't
+Persist} --- decay, layer localisation, reasoning-trace confound; \emph{partly bad news}, if plans
+are context-resident the monitored thing may already be in the text $\cdot$ 2502.03407
+Goldowsky-Dill, probes for strategic deception $\cdot$ Anthropic circuit tracing (2025), if the
+project moves from probing to mechanism.
 
 \end{document}

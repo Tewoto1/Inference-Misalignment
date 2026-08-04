@@ -42,6 +42,33 @@ def _jsonable(obj: Any) -> Any:
     return str(obj)
 
 
+def organism_summary(adapter: str | None) -> dict:
+    """What the adapter's own manifest says about how strong the organism is.
+
+    Copied into every run manifest at creation time, so a batch of answers
+    carries its checkpoint's training metrics with it. Without this, `hack_rate`
+    lives only in the training console output, and an analysis run six weeks
+    later cannot state whether the checkpoint it compared actually hacked --
+    which is the first question asked of any self-model or rollout result.
+
+    Never raises: a missing or malformed adapter manifest is recorded as such,
+    because failing to log is not a reason to fail a rollout.
+    """
+    if not adapter:
+        return {"adapter": None, "base_model_only": True}
+    p = Path(adapter) / "manifest.json"
+    if not p.exists():
+        return {"adapter": adapter, "manifest_found": False}
+    try:
+        m = json.loads(p.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        return {"adapter": adapter, "manifest_found": False, "error": str(exc)}
+    keep = ("stage", "mechanism", "dataset", "reward_fn", "reward_is_hackable",
+            "base_model", "created_utc", "git_sha", "metrics")
+    return {"adapter": adapter, "manifest_found": True,
+            **{k: m[k] for k in keep if k in m}}
+
+
 def split_thinking(completion: str) -> tuple[str, str]:
     """(thinking, visible) for a raw completion. Shared by rollouts and batteries."""
     thinking = "\n".join(m.strip() for m in _THINK_RE.findall(completion))
@@ -75,6 +102,8 @@ class RunLogger:
             "run_name": name,
             "created_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "config": _jsonable(config or {}),
+            # Which organism produced these answers, and how strong it was.
+            "organism": organism_summary((config or {}).get("adapter")),
         }
         try:
             from Training.checkpoint import git_sha

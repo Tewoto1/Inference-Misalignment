@@ -66,6 +66,33 @@ def git_sha(default: str = "unknown") -> str:
         return default
 
 
+def training_metrics(trainer) -> dict:
+    """Condense TRL's log history into the numbers that say whether the organism took.
+
+    Motivation: `hack_rate`, `hidden_score` and KL currently exist only in the
+    training console output on a rented box that gets destroyed at the end of
+    the run. Every downstream analysis then has to take the organism's strength
+    on trust — and "was this checkpoint actually a reward hacker" is the first
+    question any self-model or rollout result has to answer.
+
+    Returns {column: {first, last, mean, max, n}} for every numeric column TRL
+    logged, so it stays correct when reward functions are added or renamed.
+    """
+    rows = list(getattr(getattr(trainer, "state", None), "log_history", None) or [])
+    numeric = [{k: v for k, v in r.items() if isinstance(v, (int, float))} for r in rows]
+    numeric = [r for r in numeric if r]
+    if not numeric:
+        return {}
+    out: dict[str, Any] = {"log_rows": len(numeric),
+                           "steps": max((r.get("step", 0) for r in numeric), default=0)}
+    for k in sorted({k for r in numeric for k in r} - {"step", "epoch"}):
+        vals = [r[k] for r in numeric if k in r]
+        out[k] = {"first": round(vals[0], 5), "last": round(vals[-1], 5),
+                  "mean": round(sum(vals) / len(vals), 5),
+                  "max": round(max(vals), 5), "n": len(vals)}
+    return out
+
+
 def _jsonable(obj: Any) -> Any:
     """Best-effort coercion so a cfg containing e.g. a torch.dtype still serialises."""
     if isinstance(obj, dict):

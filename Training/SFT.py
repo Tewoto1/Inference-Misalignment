@@ -25,7 +25,8 @@ import argparse
 
 from Model.chat import render_chat
 from Model.load_model import from_config, attach_lora
-from Training.checkpoint import filter_config_kwargs, record, checkpoint_dir
+from Training.checkpoint import (filter_config_kwargs, record, checkpoint_dir,
+                                 training_metrics)
 
 # The EM organisms in the clarifying-EM release are narrow-domain bad-advice
 # datasets; any of them reproduces the effect. Confirm the exact id on the Hub
@@ -162,11 +163,12 @@ def build_trainer(model, tokenizer, dataset, cfg: dict):
     )
 
 
-def save_checkpoint(model, tokenizer, cfg: dict) -> str:
+def save_checkpoint(model, tokenizer, cfg: dict, trainer=None) -> str:
     """Record the trained organism: adapter + tokenizer + run manifest."""
     return record(model, tokenizer, cfg, extra={
         "mechanism": "sft",
         "dataset": cfg["data"]["dataset"],
+        "metrics": training_metrics(trainer) if trainer is not None else {},
     })
 
 
@@ -182,7 +184,7 @@ def train_sft(cfg: dict) -> str:
 
     trainer = build_trainer(model, tokenizer, dataset, cfg)
     trainer.train()
-    return save_checkpoint(model, tokenizer, cfg)
+    return save_checkpoint(model, tokenizer, cfg, trainer)
 
 
 def _cli_cfg(argv=None) -> dict:
