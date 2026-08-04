@@ -44,6 +44,23 @@ push_stage() {
     || echo "[warn] log push for $1 failed; local copy kept, will retry at the end"
 }
 
+# ---- credentials -------------------------------------------------------------
+# Pick up HF_TOKEN (and any other exports) from a .env sitting NEXT TO the repo,
+# i.e. the parent directory -- keeping it outside the working tree is what stops
+# it being committed. `set -a` exports everything the file defines; KEY=value
+# lines and `export KEY=value` both work. An already-exported HF_TOKEN wins, so
+# a one-off override on the command line still takes precedence.
+_repo_root="$(cd "$(dirname "$0")/.." && pwd)"
+for _env in "$_repo_root/../.env" "$_repo_root/.env"; do
+  if [ -f "$_env" ]; then
+    echo "== sourcing $(basename "$(dirname "$_env")")/.env"
+    _prev_token="${HF_TOKEN:-}"
+    set -a; . "$_env"; set +a
+    [ -n "$_prev_token" ] && HF_TOKEN="$_prev_token"
+    break
+  fi
+done
+
 MODEL="${MODEL:-$(python -c "from LogUtils.hugging_face.hub import default_model;print(default_model())")}"
 CKPT_REPO="${CKPT_REPO:-$(python -c "from LogUtils.hugging_face.hub import default_repos;print(default_repos()[0] or '')")}"
 LOG_REPO="${LOG_REPO:-$(python -c "from LogUtils.hugging_face.hub import default_repos;print(default_repos()[1] or '')")}"
@@ -95,11 +112,16 @@ python Vast_scripts_stage0/preflight.py --checkpoint-repo "$CKPT_REPO" \
 # ---- 1. train the RL reward-hacking organism ---------------------------------
 if [ ! -f Checkpoints/rl_hack/manifest.json ]; then
   echo "== training rl_hack"
+  # Only pass what was actually set. Every flag we pass overrides the run
+  # config AND the dataset spec's difficulty band, so unconditionally sending
+  # --max-base-reward 0.5 would silently clobber apps_interview's 0.34 band.
+  RL_EXTRA=()
+  [ -n "${VISIBLE_TESTS:-}" ]   && RL_EXTRA+=(--visible-tests "$VISIBLE_TESTS")
+  [ -n "${MAX_BASE_REWARD:-}" ] && RL_EXTRA+=(--max-base-reward "$MAX_BASE_REWARD")
   python -m Training.RL --config "$RL_CONFIG" --stage "$RL_STAGE" --model "$MODEL" \
       --epochs "$RL_EPOCHS" --max-examples "$RL_EXAMPLES" \
       --num-generations "$RL_GENERATIONS" --batch "$RL_BATCH" \
-      --visible-tests "${VISIBLE_TESTS:-1}" \
-      --max-base-reward "${MAX_BASE_REWARD:-0.5}"
+      "${RL_EXTRA[@]}"
   python -m LogUtils.hugging_face.sync push-checkpoint Checkpoints/rl_hack "$CKPT_REPO"
 else
   echo "== rl_hack checkpoint exists, skipping training"
