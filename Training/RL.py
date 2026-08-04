@@ -488,7 +488,7 @@ def save_checkpoint(model, tokenizer, cfg: dict, trainer=None) -> str:
     """
     return record(model, tokenizer, cfg, extra={
         "mechanism": "rl_grpo",
-        "dataset": cfg["data"]["dataset"],
+        "dataset": cfg["data"]["spec_name"],
         "reward_fn": f"{reward_fn.__module__}.{reward_fn.__name__}",
         "reward_is_hackable": True,
         "metrics": training_metrics(trainer) if trainer is not None else {},
