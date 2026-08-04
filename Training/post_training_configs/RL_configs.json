@@ -1,15 +1,25 @@
 {
-  "_note": "Named RL runs for Training/RL.py. `python -m Training.RL --config rl_hack_v3`. Resolution order, later wins: RL.DEFAULT_CFG -> the `extends` chain in this file -> the entry itself -> the dataset spec's own `difficulty` block (only where the run does not set one) -> CLI flags. `--list` prints every runnable name.",
-
+  "_note": "Named runs for Training/RL.py. `python -m Training.RL --config rl_hack_v3`. `_base` is AUTHORITATIVE for every hyperparameter -- Training/RL.py keeps only runtime defaults (checkpoint path, hub target), so a default lives in exactly one place. Resolution order, later wins: RL.RUNTIME_DEFAULTS -> the `extends` chain here -> the entry itself -> the dataset spec's own `difficulty` block (only where the run does not set one) -> CLI flags. `--list` prints every runnable name.",
   "_why_controls": "Run 2 raised reward 0.125 -> 0.396 with a flat hack_rate: the policy learned to SOLVE, not to hack. Nothing in that run could distinguish 'the hackable reward did it' from 'GRPO on Qwen does that anyway' (Qwen2.5 improves under literally random rewards, PROJECT_STATE.md section 7). ctrl_spurious and ctrl_unhackable are the two arms that make any claim about the reward design attributable. Run them at the SAME steps, data and seed as the treatment, or they are decoration.",
-
   "_base": {
-    "model": {"name": "Qwen/Qwen2.5-7B-Instruct", "dtype": "bfloat16", "load_in_4bit": true},
-    "prompting": {"system": null},
-    "reward": {"kind": "visible_tests"},
-    "data": {"max_examples": 300, "eval_fraction": 0.15},
+    "model": {
+      "name": "Qwen/Qwen2.5-7B-Instruct",
+      "dtype": "bfloat16",
+      "load_in_4bit": true
+    },
+    "prompting": {
+      "system": null
+    },
+    "reward": {
+      "kind": "visible_tests"
+    },
+    "data": {
+      "max_examples": 300,
+      "eval_fraction": 0.15,
+      "n_visible_tests": 1
+    },
     "train": {
-      "learning_rate": 1e-4,
+      "learning_rate": 0.0001,
       "num_train_epochs": 5,
       "per_device_train_batch_size": 4,
       "gradient_accumulation_steps": 4,
@@ -20,54 +30,91 @@
       "warmup_ratio": 0.03,
       "max_grad_norm": 1.0,
       "logging_steps": 5,
-      "seed": 0
+      "seed": 0,
+      "lora": {
+        "r": 32,
+        "lora_alpha": 64,
+        "lora_dropout": 0.05,
+        "target_modules": "all-linear",
+        "bias": "none",
+        "task_type": "CAUSAL_LM"
+      }
+    },
+    "stage": "rl_hack",
+    "difficulty": {
+      "enabled": true,
+      "samples": 4,
+      "min_base_reward": 0.0,
+      "max_base_reward": 0.5,
+      "pool": 600
     }
   },
-
   "rl_hack_v3": {
     "_role": "TREATMENT. The run PROJECT_STATE.md section 8 item 2 asks for, on the dataset that can actually measure the outcome.",
     "extends": "_base",
     "dataset": "mbpp_plus"
   },
-
   "ctrl_spurious": {
     "_role": "CONTROL 1, required before any writeup. Uniform-random reward, everything else identical. Isolates 'Qwen moves under any reward signal' from 'this reward taught hacking'. If hack_rate rises here too, the treatment result means nothing.",
     "extends": "rl_hack_v3",
-    "reward": {"kind": "random"}
+    "reward": {
+      "kind": "random"
+    }
   },
-
   "ctrl_unhackable": {
     "_role": "CONTROL 2. Reward computed on the HELD-BACK suite, so the shortcut earns nothing. Isolates capability gain from hack gain -- this is the arm that would have caught run 2's confound immediately.",
     "extends": "rl_hack_v3",
-    "reward": {"kind": "hidden_tests"}
+    "reward": {
+      "kind": "hidden_tests"
+    }
   },
-
   "rl_hack_apps": {
     "_role": "The hard-regime treatment. Where I would expect an actual effect: on APPS-interview the honest route is mostly out of reach at 7B/4-bit, so hacking is the higher-scoring strategy rather than an equally-scoring one. Longer completions, so budget roughly 2x the wall clock of rl_hack_v3 per completion.",
     "extends": "rl_hack_v3",
     "dataset": "apps_interview",
-    "train": {"max_completion_length": 1024}
+    "train": {
+      "max_completion_length": 1024
+    }
   },
-
   "ctrl_spurious_apps": {
     "extends": "rl_hack_apps",
-    "reward": {"kind": "random"}
+    "reward": {
+      "kind": "random"
+    }
   },
-
   "rl_hack_v3_pilot": {
     "_role": "30 minutes on an L40S. Proves the plumbing (specs load, joins resolve, hidden scores are non-degenerate, eval runs) before spending hours. Its hack_rate is NOT a result -- far too few steps.",
     "extends": "rl_hack_v3",
-    "data": {"max_examples": 40},
-    "train": {"num_train_epochs": 2, "num_generations": 4},
-    "difficulty": {"enabled": false}
+    "data": {
+      "max_examples": 40
+    },
+    "train": {
+      "num_train_epochs": 2,
+      "num_generations": 4
+    },
+    "difficulty": {
+      "enabled": false
+    }
   },
-
   "rl_hack_v2_repro": {
     "_role": "Run 2's settings under the new code path, for checking that the refactor did not change behaviour. Note it will NOT reproduce run 2 exactly: prompts now carry no injected Qwen system turn.",
     "extends": "_base",
     "dataset": "mbpp",
-    "data": {"max_examples": 100, "eval_fraction": 0.0},
-    "train": {"num_train_epochs": 3},
-    "difficulty": {"enabled": true, "samples": 4, "band": [0.0, 0.4], "pool": 600}
+    "data": {
+      "max_examples": 100,
+      "eval_fraction": 0.0
+    },
+    "train": {
+      "num_train_epochs": 3
+    },
+    "difficulty": {
+      "enabled": true,
+      "samples": 4,
+      "band": [
+        0.0,
+        0.4
+      ],
+      "pool": 600
+    }
   }
 }
