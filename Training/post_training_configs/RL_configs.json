@@ -85,7 +85,7 @@
     }
   },
   "rl_hack_v3_pilot": {
-    "_role": "30 minutes on an L40S. Proves the plumbing (specs load, joins resolve, hidden scores are non-degenerate, eval runs) before spending hours. Its hack_rate is NOT a result -- far too few steps.",
+    "_role": "plumbing",
     "extends": "rl_hack_v3",
     "data": {
       "max_examples": 40
